@@ -205,14 +205,20 @@ function renderEventStream(logs, prependNew = false) {
   if (!container) return;
 
   if (!logs || logs.length === 0) {
-    if (container.children.length === 0) {
-      container.innerHTML = '<div class="stream-empty-state">No real-time security events received yet.</div>';
+    if (container.children.length === 0 || container.querySelector('.event-skeleton-item')) {
+      container.innerHTML = `
+        <div class="cyber-empty-state stream-empty-state">
+          <div class="empty-state-icon">📡</div>
+          <div class="empty-state-title">NO SECURITY EVENTS INGESTED</div>
+          <div class="empty-state-desc">The live event pipeline is awaiting telemetry ingest or attack simulation trigger.</div>
+        </div>
+      `;
     }
     return;
   }
 
-  const emptyPlaceholder = container.querySelector('.stream-empty-state');
-  if (emptyPlaceholder) emptyPlaceholder.remove();
+  const emptyPlaceholder = container.querySelector('.stream-empty-state, .cyber-empty-state, .event-skeleton-item');
+  if (emptyPlaceholder) container.innerHTML = '';
 
   if (prependNew) {
     for (let i = logs.length - 1; i >= 0; i--) {
@@ -253,8 +259,9 @@ async function fetchLogs() {
     const isInitial = state.logs.length === 0;
     state.logs = logs;
     renderEventStream(logs, !isInitial);
-    hideOfflineAlert();
+    handleFetchSuccess();
   } catch (error) {
+    handleFetchFailure(error);
     if (state.logs.length === 0) {
       const demoLogs = [
         { id: 103, timestamp: '10:31:16', source_ip: '192.168.1.50', event_type: 'TRAFFIC_SPIKE', source: 'Network Monitor', status: 'DETECTED', severity: 'HIGH' },
@@ -386,7 +393,13 @@ function renderIncidentsTable(incidents) {
   if (!incidents || incidents.length === 0) {
     tbody.innerHTML = `
       <tr class="table-empty-row">
-        <td colspan="9" class="text-center">No active composite incidents loaded.</td>
+        <td colspan="9">
+          <div class="empty-table-wrap cyber-empty-state">
+            <div class="empty-state-icon">🛡️</div>
+            <div class="empty-state-title">NO COMPOSITE INCIDENTS DETECTED</div>
+            <div class="empty-state-desc">Weak signals have not crossed the correlation threshold to form an incident dossier.</div>
+          </div>
+        </td>
       </tr>
     `;
     return;
@@ -444,7 +457,13 @@ function renderSignalFusionVisualizer(incident) {
   if (!container) return;
 
   if (!incident) {
-    container.innerHTML = '<div class="fusion-placeholder">Select an active composite incident to view signal correlation paths.</div>';
+    container.innerHTML = `
+      <div class="cyber-empty-state fusion-empty-state">
+        <div class="empty-state-icon">⚡</div>
+        <div class="empty-state-title">SIGNAL FUSION MATRIX IDLE</div>
+        <div class="empty-state-desc">Select an incident from the table or trigger simulation to trace signal correlation pathways.</div>
+      </div>
+    `;
     return;
   }
 
@@ -584,7 +603,13 @@ function renderAttackTimeline(incident) {
   if (!container) return;
 
   if (!incident) {
-    container.innerHTML = '<div class="timeline-empty-state">Timeline awaiting incident selection.</div>';
+    container.innerHTML = `
+      <div class="cyber-empty-state timeline-empty-state">
+        <div class="empty-state-icon">⏱️</div>
+        <div class="empty-state-title">ATTACK TIMELINE INACTIVE</div>
+        <div class="empty-state-desc">Correlated attack progression stages will render when an incident is active.</div>
+      </div>
+    `;
     return;
   }
 
@@ -782,7 +807,13 @@ function renderResponseQueue(queueList, capacityInfo) {
   if (!container) return;
 
   if (!queueList || queueList.length === 0) {
-    container.innerHTML = '<div class="queue-empty-state">No incidents waiting in response queue.</div>';
+    container.innerHTML = `
+      <div class="cyber-empty-state queue-empty-state">
+        <div class="empty-state-icon">📥</div>
+        <div class="empty-state-title">RESPONSE QUEUE CLEAR</div>
+        <div class="empty-state-desc">All escalated incidents have been resolved or assigned. Analyst bandwidth normal.</div>
+      </div>
+    `;
     return;
   }
 
@@ -801,8 +832,9 @@ async function fetchQueue() {
     state.queue = data.queue || (Array.isArray(data) ? data : []);
     state.capacity = data.capacity || state.capacity;
     renderResponseQueue(state.queue, state.capacity);
-    hideOfflineAlert();
+    handleFetchSuccess();
   } catch (error) {
+    handleFetchFailure(error);
     if (state.queue.length === 0) {
       const demoQueue = [
         { rank: 1, incident_id: 'INC-001', severity: 'CRITICAL', risk_score: 92, analyst: 'Analyst A', status: 'INVESTIGATING' },
@@ -827,8 +859,9 @@ async function fetchIncidents() {
     const incidents = Array.isArray(data) ? data : (data.incidents || []);
     state.incidents = incidents;
     renderIncidentsTable(incidents);
-    hideOfflineAlert();
+    handleFetchSuccess();
   } catch (error) {
+    handleFetchFailure(error);
     if (state.incidents.length === 0) {
       const demoIncidents = [
         {
@@ -1409,8 +1442,9 @@ async function fetchStats() {
     const data = await response.json();
     state.stats = data;
     renderSummaryCards(state.stats);
-    hideOfflineAlert();
+    handleFetchSuccess();
   } catch (error) {
+    handleFetchFailure(error);
     if (state.stats.total_events === 0) {
       const demoStats = {
         total_events: 12540,
@@ -1442,6 +1476,23 @@ function initClock() {
   setInterval(update, 1000);
 }
 
+let consecutiveFetchFailures = 0;
+
+function handleFetchSuccess() {
+  consecutiveFetchFailures = 0;
+  state.isOnline = true;
+  hideOfflineAlert();
+}
+
+function handleFetchFailure(error) {
+  consecutiveFetchFailures++;
+  console.warn('[SOC-FUSION] Telemetry sync notice:', error?.message || error);
+  if (consecutiveFetchFailures >= 2) {
+    state.isOnline = false;
+    showOfflineAlert();
+  }
+}
+
 function showOfflineAlert() {
   const alertEl = document.getElementById('offline-alert');
   const statusEl = document.getElementById('system-status-indicator');
@@ -1464,6 +1515,85 @@ function hideOfflineAlert() {
     statusEl.classList.add('online');
   }
   if (statusText) statusText.textContent = 'SYSTEM ONLINE';
+}
+
+function renderLoadingSkeletons() {
+  const tbody = document.getElementById('incidents-table-body');
+  if (tbody && state.incidents.length === 0) {
+    tbody.innerHTML = `
+      <tr class="table-skeleton-row"><td colspan="9"><div class="skeleton-shimmer table-skeleton-cell"></div></td></tr>
+      <tr class="table-skeleton-row"><td colspan="9"><div class="skeleton-shimmer table-skeleton-cell"></div></td></tr>
+      <tr class="table-skeleton-row"><td colspan="9"><div class="skeleton-shimmer table-skeleton-cell"></div></td></tr>
+      <tr class="table-skeleton-row"><td colspan="9"><div class="skeleton-shimmer table-skeleton-cell"></div></td></tr>
+    `;
+  }
+
+  const eventContainer = document.getElementById('event-stream-container');
+  if (eventContainer && state.logs.length === 0) {
+    eventContainer.innerHTML = `
+      <div class="skeleton-shimmer event-skeleton-item"></div>
+      <div class="skeleton-shimmer event-skeleton-item"></div>
+      <div class="skeleton-shimmer event-skeleton-item"></div>
+      <div class="skeleton-shimmer event-skeleton-item"></div>
+    `;
+  }
+
+  const queueContainer = document.getElementById('response-queue-container');
+  if (queueContainer && state.queue.length === 0) {
+    queueContainer.innerHTML = `
+      <div class="skeleton-shimmer queue-skeleton-item"></div>
+      <div class="skeleton-shimmer queue-skeleton-item"></div>
+      <div class="skeleton-shimmer queue-skeleton-item"></div>
+    `;
+  }
+
+  const fusionContainer = document.getElementById('signal-fusion-visualizer');
+  if (fusionContainer && !state.selectedIncident) {
+    fusionContainer.innerHTML = `
+      <div class="cyber-empty-state fusion-empty-state">
+        <div class="empty-state-icon">⚡</div>
+        <div class="empty-state-title">SIGNAL FUSION MATRIX IDLE</div>
+        <div class="empty-state-desc">Select an incident from the table or trigger simulation to trace signal correlation pathways.</div>
+      </div>
+    `;
+  }
+
+  const timelineContainer = document.getElementById('attack-timeline-container');
+  if (timelineContainer && !state.selectedIncident) {
+    timelineContainer.innerHTML = `
+      <div class="cyber-empty-state timeline-empty-state">
+        <div class="empty-state-icon">⏱️</div>
+        <div class="empty-state-title">ATTACK TIMELINE INACTIVE</div>
+        <div class="empty-state-desc">Correlated attack progression stages will render when an incident is active.</div>
+      </div>
+    `;
+  }
+}
+
+async function handleRetryConnection() {
+  const retryBtn = document.getElementById('btn-retry-connection');
+  if (retryBtn) {
+    retryBtn.textContent = '🔄 Reconnecting...';
+    retryBtn.classList.add('loading');
+    retryBtn.disabled = true;
+  }
+
+  try {
+    await Promise.all([
+      fetchStats(),
+      fetchLogs(),
+      fetchIncidents(),
+      fetchQueue()
+    ]);
+  } catch (err) {
+    console.error('[SOC-FUSION] Reconnect attempt failed:', err);
+  } finally {
+    if (retryBtn) {
+      retryBtn.textContent = 'Retry';
+      retryBtn.classList.remove('loading');
+      retryBtn.disabled = false;
+    }
+  }
 }
 
 /**
@@ -1858,14 +1988,19 @@ window.socDashboard = {
   getCharts: () => charts,
   getQueue: () => state.queue,
   triggerSimulation: triggerAttackSimulation,
+  renderLoadingSkeletons: renderLoadingSkeletons,
+  handleRetryConnection: handleRetryConnection,
+  showOfflineAlert: showOfflineAlert,
+  hideOfflineAlert: hideOfflineAlert,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 12: Attack Simulation Pipeline...');
+  console.log('[SOC-FUSION] Initializing Phase 13: Loading Skeletons, Cyber Empty States, & Error Recovery...');
   initClock();
   initModalListeners();
+  renderLoadingSkeletons();
   fetchStats();
   fetchLogs();
   fetchIncidents();
@@ -1887,12 +2022,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const retryBtn = document.getElementById('btn-retry-connection');
   if (retryBtn) {
-    retryBtn.addEventListener('click', () => {
-      fetchStats();
-      fetchLogs();
-      fetchIncidents();
-      fetchQueue();
-      renderCharts();
-    });
+    retryBtn.addEventListener('click', handleRetryConnection);
   }
 });
