@@ -46,7 +46,8 @@ const state = {
     active_analysts: 3,
     max_analysts: 3
   },
-  isOnline: true
+  isOnline: true,
+  isSimulating: false
 };
 
 // Active Chart Instances Storage (prevents memory leakage and canvas resize bugs)
@@ -1459,33 +1460,348 @@ function hideOfflineAlert() {
   if (statusText) statusText.textContent = 'SYSTEM ONLINE';
 }
 
-// Global debug & test API exposed to window for automated testing and interaction
+/**
+ * ==========================================================================
+ * ATTACK SIMULATION CONTROLLER (PHASE 12)
+ * ==========================================================================
+ */
+let toastTimeout = null;
+
+function showSimulationToast(title, desc, durationMs = null) {
+  const toast = document.getElementById('simulation-toast');
+  const titleEl = document.getElementById('toast-title');
+  const descEl = document.getElementById('toast-desc');
+
+  if (!toast || !titleEl || !descEl) return;
+
+  titleEl.textContent = title;
+  descEl.textContent = desc;
+  toast.classList.remove('hidden');
+
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+
+  if (durationMs) {
+    toastTimeout = setTimeout(() => {
+      toast.classList.add('hidden');
+    }, durationMs);
+  }
+}
+
+function hideSimulationToast() {
+  const toast = document.getElementById('simulation-toast');
+  if (toast) toast.classList.add('hidden');
+}
+
+async function triggerAttackSimulation() {
+  if (state.isSimulating) return;
+  state.isSimulating = true;
+
+  const btnSim = document.getElementById('btn-start-simulation');
+  if (btnSim) {
+    btnSim.textContent = '⏳ SIMULATING ATTACK...';
+    btnSim.classList.add('btn-simulating');
+    btnSim.disabled = true;
+  }
+
+  // Pre-seed backend simulation if available
+  let backendPayload = null;
+  try {
+    const res = await fetch(API_CONFIG.ENDPOINTS.START_SIMULATION, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      backendPayload = await res.json();
+    }
+  } catch (err) {
+    console.warn('[SOC-FUSION] Live backend simulation unavailable. Running simulated telemetry client-side.', err);
+  }
+
+  const fusionContainer = document.getElementById('signal-fusion-container');
+  const eventContainer = document.getElementById('event-stream-container');
+
+  // STEP 1: Reconnaissance (T = 0ms)
+  showSimulationToast(
+    'STEP 1/5: RECONNAISSANCE DETECTED',
+    'High-frequency TCP SYN port scan from 192.168.1.50 targeting ports 22, 80, 443, 3389...'
+  );
+
+  const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const log1 = {
+    id: Date.now() + 1,
+    timestamp: nowTime,
+    source_ip: '192.168.1.50',
+    event_type: 'PORT_SCAN',
+    source: 'Firewall',
+    signal: 'TCP_SYN_SWEEP',
+    severity: 'HIGH',
+    status: 'DETECTED',
+    action: 'FLAGGED',
+    details: 'Rapid scan on ports 22, 80, 443, 3389, 8080 from single host'
+  };
+
+  state.logs.unshift(log1);
+  if (eventContainer) {
+    const logEl1 = createEventStreamElement(log1, true);
+    eventContainer.insertBefore(logEl1, eventContainer.firstChild);
+    while (eventContainer.children.length > 50) {
+      eventContainer.removeChild(eventContainer.lastChild);
+    }
+  }
+  state.stats.total_events += 5;
+  state.stats.signals_detected += 1;
+  renderSummaryStats(state.stats);
+
+  // STEP 2: Initial Access / Brute Force (T = 1800ms)
+  setTimeout(() => {
+    showSimulationToast(
+      'STEP 2/5: BRUTE FORCE ATTACK',
+      '5 consecutive failed logins for root account on Auth-Gateway-01 from 192.168.1.50.'
+    );
+
+    const log2 = {
+      id: Date.now() + 2,
+      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      source_ip: '192.168.1.50',
+      event_type: 'FAILED_LOGIN',
+      source: 'Auth Gateway',
+      signal: 'BRUTE_FORCE',
+      severity: 'HIGH',
+      status: 'DETECTED',
+      action: 'BLOCKED',
+      details: '5 consecutive failed logins for root on Auth-Gateway-01'
+    };
+
+    state.logs.unshift(log2);
+    if (eventContainer) {
+      const logEl2 = createEventStreamElement(log2, true);
+      eventContainer.insertBefore(logEl2, eventContainer.firstChild);
+      while (eventContainer.children.length > 50) {
+        eventContainer.removeChild(eventContainer.lastChild);
+      }
+    }
+    state.stats.total_events += 15;
+    state.stats.signals_detected += 2;
+    renderSummaryStats(state.stats);
+  }, 1800);
+
+  // STEP 3: Anomaly Detected (T = 3600ms)
+  setTimeout(() => {
+    showSimulationToast(
+      'STEP 3/5: TRAFFIC ANOMALY DETECTED',
+      'Outbound egress surge (4.8 GB) detected from 192.168.1.50 to unverified ASN.'
+    );
+
+    const log3 = {
+      id: Date.now() + 3,
+      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      source_ip: '192.168.1.50',
+      event_type: 'TRAFFIC_SPIKE',
+      source: 'DPI Sensor',
+      signal: 'EGRESS_BURST',
+      severity: 'CRITICAL',
+      status: 'DETECTED',
+      action: 'RATE_LIMITED',
+      details: 'Outbound surge: 4.8 GB transferred within 90s'
+    };
+
+    state.logs.unshift(log3);
+    if (eventContainer) {
+      const logEl3 = createEventStreamElement(log3, true);
+      eventContainer.insertBefore(logEl3, eventContainer.firstChild);
+      while (eventContainer.children.length > 50) {
+        eventContainer.removeChild(eventContainer.lastChild);
+      }
+    }
+    state.stats.total_events += 42;
+    state.stats.signals_detected += 3;
+    renderSummaryStats(state.stats);
+  }, 3600);
+
+  // STEP 4: Signal Fusion Engine Matrix Match (T = 5200ms)
+  setTimeout(() => {
+    showSimulationToast(
+      'STEP 4/5: SIGNAL FUSION MATRIX MATCH',
+      'Correlating 3 weak signals from 192.168.1.50 within 60s temporal window...'
+    );
+
+    if (fusionContainer) {
+      fusionContainer.classList.add('fusion-pulse-active');
+    }
+
+    const simIncident = backendPayload?.incident || {
+      id: 'INC-001',
+      source_ip: '192.168.1.50',
+      incident_type: 'MULTI-STAGE ATTACK',
+      title: 'Credential Stuffing & Lateral Reconnaissance',
+      target: 'Auth-Gateway-01',
+      signals_count: 6,
+      signals: ['PORT_SCAN', 'FAILED_LOGIN', 'TRAFFIC_SPIKE', 'SYN_FLOOD', 'BRUTE_FORCE', 'EGRESS_BURST'],
+      severity: 'CRITICAL',
+      risk_score: 94,
+      confidence: 96,
+      status: 'OPEN',
+      first_seen: nowTime,
+      last_seen: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      reasons: [
+        '5 failed logins from single external IP within 60s window',
+        'Correlated port scanning activity targeting SSH (22) and RDP (3389)',
+        'Anomalous outbound traffic volume spike (4.8 GB) detected on egress router',
+        'Signal Fusion Confidence: 96.4% multi-stage correlation match'
+      ],
+      progression: ['Reconnaissance', 'Initial Access', 'Brute Force', 'Signal Fusion', 'Escalation'],
+      recommended_action: 'Isolate host 192.168.1.50 at firewall perimeter immediately. Revoke root Kerberos ticket.',
+      timeline: [
+        { time: nowTime, event: 'PORT SCAN', ip: '192.168.1.50', stage: 'Reconnaissance', type: 'stage-recon', sev: 'medium' },
+        { time: nowTime, event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Initial Access', type: 'stage-access', sev: 'high' },
+        { time: nowTime, event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Brute Force', type: 'stage-access', sev: 'high' },
+        { time: nowTime, event: 'TRAFFIC SPIKE', ip: '192.168.1.50', stage: 'Anomaly Detected', type: 'stage-anomaly', sev: 'high' },
+        { time: nowTime, event: 'COMPOSITE INCIDENT', ip: '192.168.1.50', stage: 'Signal Fusion', type: 'stage-escalation', sev: 'critical' },
+        { time: nowTime, event: 'CRITICAL ESCALATION', ip: '192.168.1.50', stage: 'SOC Priority #1', type: 'stage-escalation', sev: 'critical' }
+      ]
+    };
+
+    renderSignalFusionVisualizer(simIncident);
+  }, 5200);
+
+  // STEP 5: Incident Escalation & Response Queue Priority #1 (T = 6800ms)
+  setTimeout(() => {
+    showSimulationToast(
+      'STEP 5/5: CRITICAL INCIDENT ESCALATED',
+      'INC-001 prioritized to Rank #1 in SOC Queue. Analyst bandwidth at 100% saturation!'
+    );
+
+    if (fusionContainer) {
+      fusionContainer.classList.remove('fusion-pulse-active');
+    }
+
+    const simIncident = backendPayload?.incident || {
+      id: 'INC-001',
+      source_ip: '192.168.1.50',
+      incident_type: 'MULTI-STAGE ATTACK',
+      title: 'Credential Stuffing & Lateral Reconnaissance',
+      target: 'Auth-Gateway-01',
+      signals_count: 6,
+      signals: ['PORT_SCAN', 'FAILED_LOGIN', 'TRAFFIC_SPIKE', 'SYN_FLOOD', 'BRUTE_FORCE', 'EGRESS_BURST'],
+      severity: 'CRITICAL',
+      risk_score: 94,
+      confidence: 96,
+      status: 'OPEN',
+      first_seen: nowTime,
+      last_seen: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      reasons: [
+        '5 failed logins from single external IP within 60s window',
+        'Correlated port scanning activity targeting SSH (22) and RDP (3389)',
+        'Anomalous outbound traffic volume spike (4.8 GB) detected on egress router',
+        'Signal Fusion Confidence: 96.4% multi-stage correlation match'
+      ],
+      progression: ['Reconnaissance', 'Initial Access', 'Brute Force', 'Signal Fusion', 'Escalation'],
+      recommended_action: 'Isolate host 192.168.1.50 at firewall perimeter immediately. Revoke root Kerberos ticket.',
+      timeline: [
+        { time: nowTime, event: 'PORT SCAN', ip: '192.168.1.50', stage: 'Reconnaissance', type: 'stage-recon', sev: 'medium' },
+        { time: nowTime, event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Initial Access', type: 'stage-access', sev: 'high' },
+        { time: nowTime, event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Brute Force', type: 'stage-access', sev: 'high' },
+        { time: nowTime, event: 'TRAFFIC SPIKE', ip: '192.168.1.50', stage: 'Anomaly Detected', type: 'stage-anomaly', sev: 'high' },
+        { time: nowTime, event: 'COMPOSITE INCIDENT', ip: '192.168.1.50', stage: 'Signal Fusion', type: 'stage-escalation', sev: 'critical' },
+        { time: nowTime, event: 'CRITICAL ESCALATION', ip: '192.168.1.50', stage: 'SOC Priority #1', type: 'stage-escalation', sev: 'critical' }
+      ]
+    };
+
+    // Update state incidents
+    const incIdx = state.incidents.findIndex(i => i.id === 'INC-001');
+    if (incIdx !== -1) {
+      state.incidents[incIdx] = simIncident;
+    } else {
+      state.incidents.unshift(simIncident);
+    }
+    renderIncidentsTable(state.incidents);
+
+    // Flash the table row
+    const targetRow = document.querySelector('#incidents-table-body tr[data-id="INC-001"]');
+    if (targetRow) {
+      targetRow.classList.add('row-flash-critical');
+    }
+
+    // Elevate INC-001 in queue
+    const filteredQueue = state.queue.filter(q => q.incident_id !== 'INC-001');
+    state.queue = [
+      {
+        rank: 1,
+        priority: 1,
+        incident_id: 'INC-001',
+        title: simIncident.title,
+        severity: 'CRITICAL',
+        risk_score: 94,
+        target: 'Auth-Gateway-01',
+        signals_count: 6,
+        time_waiting: 'Just now',
+        analyst: null,
+        status: 'WAITING'
+      },
+      ...filteredQueue.slice(0, 4)
+    ].map((item, idx) => ({ ...item, rank: idx + 1, priority: idx + 1 }));
+
+    state.capacity = {
+      active_analysts: 3,
+      max_analysts: 3,
+      total_analysts: 3,
+      utilization: '100%'
+    };
+    renderResponseQueue(state.queue, state.capacity);
+
+    // Select the incident
+    selectIncident(simIncident, false);
+
+    // Update charts
+    renderCharts();
+  }, 6800);
+
+  // STEP 6: Complete (T = 8200ms)
+  setTimeout(() => {
+    showSimulationToast(
+      'ATTACK SIMULATION COMPLETE',
+      'Multi-stage intrusion successfully fused and prioritized into SOC Response Queue.',
+      4500
+    );
+
+    if (btnSim) {
+      btnSim.textContent = '↺ RE-RUN ATTACK SIMULATION';
+      btnSim.classList.remove('btn-simulating');
+      btnSim.disabled = false;
+    }
+    state.isSimulating = false;
+  }, 8200);
+}
+
 window.socDashboard = {
+  formatNumber: formatNumber,
   updateStats: (customStats) => {
     state.stats = { ...state.stats, ...customStats };
-    renderSummaryCards(state.stats);
+    renderSummaryStats(state.stats);
     return state.stats;
   },
   pushEvent: (eventData) => {
     const newEvent = {
       id: Date.now(),
-      timestamp: eventData.timestamp || new Date().toTimeString().split(' ')[0],
+      timestamp: eventData.timestamp || new Date().toLocaleTimeString('en-US', { hour12: false }),
       source_ip: eventData.source_ip || '192.168.1.50',
       event_type: eventData.event_type || 'TRAFFIC_SPIKE',
       source: eventData.source || 'Network Monitor',
       status: eventData.status || 'DETECTED',
-      severity: eventData.severity || getSeverityForEvent(eventData.event_type)
+      severity: eventData.severity || 'HIGH'
     };
     renderEventStream([newEvent], true);
     state.stats.total_events = (state.stats.total_events || 0) + 1;
-    renderSummaryCards(state.stats);
+    renderSummaryStats(state.stats);
     return newEvent;
   },
-  selectIncident: (id) => {
-    const target = state.incidents.find(inc => inc.id === id);
-    if (target) selectIncident(target, false);
-    return target;
-  },
+  renderSummaryStats: renderSummaryStats,
+  renderEventStream: renderEventStream,
+  renderIncidentsTable: renderIncidentsTable,
+  selectIncident: selectIncident,
   openModal: (id) => {
     const target = state.incidents.find(inc => inc.id === id) || state.selectedIncident;
     if (target) openIncidentModal(target);
@@ -1507,12 +1823,13 @@ window.socDashboard = {
   renderCharts: renderCharts,
   getCharts: () => charts,
   getQueue: () => state.queue,
+  triggerSimulation: triggerAttackSimulation,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 10: Security Analytics & Chart.js...');
+  console.log('[SOC-FUSION] Initializing Phase 12: Attack Simulation Pipeline...');
   initClock();
   initModalListeners();
   fetchStats();
@@ -1521,7 +1838,13 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchQueue();
   renderCharts();
 
+  const simBtn = document.getElementById('btn-start-simulation');
+  if (simBtn) {
+    simBtn.addEventListener('click', triggerAttackSimulation);
+  }
+
   setInterval(() => {
+    if (state.isSimulating) return;
     fetchStats();
     fetchLogs();
     fetchIncidents();

@@ -275,6 +275,112 @@ body {
   transform: translateY(0);
 }
 
+.btn-simulation.btn-simulating {
+  background: linear-gradient(135deg, #b45309 0%, #dc2626 100%) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  cursor: wait !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) !important;
+  animation: pulse-sim-btn 1.4s infinite ease-in-out;
+}
+
+@keyframes pulse-sim-btn {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.85);
+    transform: scale(1.02);
+  }
+}
+
+/* Simulation HUD Toast */
+.simulation-toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: rgba(11, 17, 32, 0.95);
+  border: 1px solid var(--accent-cyan);
+  box-shadow: 0 8px 32px rgba(0, 210, 255, 0.25), 0 0 20px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  padding: 1rem 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 9999;
+  max-width: 480px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.simulation-toast.hidden {
+  display: none !important;
+}
+
+.toast-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  animation: toast-indicator-pulse 1s infinite alternate;
+  flex-shrink: 0;
+}
+
+@keyframes toast-indicator-pulse {
+  from { opacity: 0.4; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.3); }
+}
+
+.toast-title {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.toast-desc {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-top: 0.2rem;
+  line-height: 1.35;
+}
+
+/* Fusion Matrix Active Pulse */
+.fusion-pulse-active {
+  animation: pulse-fusion-glow 1.5s infinite ease-in-out !important;
+  border-color: var(--accent-cyan) !important;
+}
+
+@keyframes pulse-fusion-glow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(0, 210, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(0, 210, 255, 0.6), inset 0 0 16px rgba(0, 210, 255, 0.15);
+  }
+}
+
+/* Table Row Critical Escalation Flash */
+.row-flash-critical {
+  animation: flash-critical-anim 2.5s ease-out forwards;
+}
+
+@keyframes flash-critical-anim {
+  0% {
+    background-color: rgba(239, 68, 68, 0.35) !important;
+    box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.5);
+  }
+  100% {
+    background-color: transparent !important;
+    box-shadow: none;
+  }
+}
+
 /* --------------------------------------------------------------------------
    4. SYSTEM NOTIFICATION / OFFLINE BANNER
    -------------------------------------------------------------------------- */

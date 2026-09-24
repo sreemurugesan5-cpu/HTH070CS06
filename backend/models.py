@@ -282,3 +282,135 @@ def get_queue_with_capacity():
         },
         'queue': queue_list
     }
+
+def execute_attack_simulation():
+    """Simulate an end-to-end multi-stage intrusion attack scenario in the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    now_ts = datetime.now().strftime('%H:%M:%S')
+    now_dt = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # 1. Insert attack event logs
+    sim_logs = [
+        (now_ts, '192.168.1.50', 'PORT_SCAN', 'TCP_SYN_SWEEP', 'HIGH', 'FLAGGED', 'Rapid scan on ports 22, 80, 443, 3389, 8080 from single host'),
+        (now_ts, '192.168.1.50', 'FAILED_LOGIN', 'BRUTE_FORCE', 'HIGH', 'BLOCKED', '5 consecutive failed authentication attempts on Auth-Gateway root account'),
+        (now_ts, '192.168.1.50', 'TRAFFIC_SPIKE', 'EGRESS_BURST', 'CRITICAL', 'RATE_LIMITED', 'Outbound data surge: 4.8 GB transferred within 90s to unverified ASN')
+    ]
+
+    inserted_logs = []
+    for log_item in sim_logs:
+        cursor.execute('''
+            INSERT INTO logs (timestamp, source_ip, event_type, signal, severity, action, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', log_item)
+        inserted_logs.append({
+            'id': cursor.lastrowid,
+            'timestamp': log_item[0],
+            'source_ip': log_item[1],
+            'event_type': log_item[2],
+            'source': log_item[2],
+            'signal': log_item[3],
+            'severity': log_item[4],
+            'status': 'DETECTED',
+            'action': log_item[5],
+            'details': log_item[6]
+        })
+
+    # 2. Update stats
+    cursor.execute('''
+        UPDATE stats
+        SET total_events = total_events + 18,
+            signals_detected = signals_detected + 6
+        WHERE id = 1
+    ''')
+
+    # 3. Create or update INC-001 as Critical Composite Incident
+    correlation_reasons = json.dumps([
+        '5 failed logins from single external IP within 60s window',
+        'Correlated port scanning activity targeting SSH (22) and RDP (3389)',
+        'Anomalous outbound traffic volume spike (4.8 GB) detected on egress router',
+        'Signal Fusion Confidence: 96.4% multi-stage correlation match'
+    ])
+    attack_steps = json.dumps([
+        'Reconnaissance: High-frequency TCP SYN port scan (ports 22, 80, 443, 3389)',
+        'Initial Access: Brute-force credential stuffing against root and admin accounts',
+        'Privilege Escalation: Attempt via sudo exploit vector',
+        'Signal Fusion: Fused 6 weak signals into Composite Critical Incident INC-001'
+    ])
+    recommended_actions = json.dumps([
+        'Isolate host 192.168.1.50 at boundary firewall perimeter immediately',
+        'Revoke active Kerberos ticket-granting session for root account',
+        'Force MFA re-authentication for Auth-Gateway-01 service account',
+        'Snapshot memory dump for forensic analysis on host 10.0.12.8'
+    ])
+    timeline = json.dumps([
+        { 'time': now_ts, 'event': 'PORT SCAN', 'ip': '192.168.1.50', 'stage': 'Reconnaissance', 'type': 'stage-recon', 'sev': 'medium' },
+        { 'time': now_ts, 'event': 'FAILED LOGIN', 'ip': '192.168.1.50', 'stage': 'Initial Access', 'type': 'stage-access', 'sev': 'high' },
+        { 'time': now_ts, 'event': 'FAILED LOGIN', 'ip': '192.168.1.50', 'stage': 'Brute Force', 'type': 'stage-access', 'sev': 'high' },
+        { 'time': now_ts, 'event': 'TRAFFIC SPIKE', 'ip': '192.168.1.50', 'stage': 'Anomaly Detected', 'type': 'stage-anomaly', 'sev': 'high' },
+        { 'time': now_ts, 'event': 'COMPOSITE INCIDENT', 'ip': '192.168.1.50', 'stage': 'Signal Fusion', 'type': 'stage-escalation', 'sev': 'critical' },
+        { 'time': now_ts, 'event': 'CRITICAL ESCALATION', 'ip': '192.168.1.50', 'stage': 'SOC Priority #1', 'type': 'stage-escalation', 'sev': 'critical' }
+    ])
+
+    cursor.execute('''
+        INSERT INTO incidents (
+            id, incident_type, title, severity, risk_score, confidence,
+            source_ip, target, signals_count, signals, status, analyst,
+            time_elapsed, first_seen, last_seen, created_at,
+            correlation_reasons, attack_steps, recommended_actions, timeline
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            severity = 'CRITICAL',
+            risk_score = 94,
+            confidence = 96,
+            signals_count = 6,
+            status = 'ACTIVE',
+            analyst = 'Unassigned',
+            time_elapsed = 'Just now',
+            last_seen = excluded.last_seen,
+            correlation_reasons = excluded.correlation_reasons,
+            attack_steps = excluded.attack_steps,
+            recommended_actions = excluded.recommended_actions,
+            timeline = excluded.timeline
+    ''', (
+        'INC-001', 'MULTI-STAGE ATTACK', 'Credential Stuffing & Lateral Reconnaissance',
+        'CRITICAL', 94, 96, '192.168.1.50', 'Auth-Gateway-01', 6,
+        json.dumps(['PORT_SCAN', 'FAILED_LOGIN', 'TRAFFIC_SPIKE', 'SYN_FLOOD', 'BRUTE_FORCE', 'EGRESS_BURST']),
+        'ACTIVE', 'Unassigned', 'Just now', now_ts, now_ts, now_dt,
+        correlation_reasons, attack_steps, recommended_actions, timeline
+    ))
+
+    # 4. Elevate INC-001 to Priority #1 in Queue
+    cursor.execute('DELETE FROM queue WHERE incident_id = ?', ('INC-001',))
+    cursor.execute('SELECT incident_id, title, severity, risk_score, target, signals_count, time_waiting, analyst, status FROM queue ORDER BY priority ASC')
+    existing_items = cursor.fetchall()
+
+    cursor.execute('DELETE FROM queue')
+
+    # Priority 1: INC-001
+    cursor.execute('''
+        INSERT INTO queue (priority, rank, incident_id, title, severity, risk_score, target, signals_count, time_waiting, analyst, status)
+        VALUES (1, 1, 'INC-001', 'Credential Stuffing & Lateral Reconnaissance', 'CRITICAL', 94, 'Auth-Gateway-01', 6, 'Just now', NULL, 'WAITING')
+    ''')
+
+    # Subsequent priorities 2..5
+    for idx, row in enumerate(existing_items[:4], start=2):
+        cursor.execute('''
+            INSERT INTO queue (priority, rank, incident_id, title, severity, risk_score, target, signals_count, time_waiting, analyst, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (idx, idx, row['incident_id'], row['title'], row['severity'], row['risk_score'], row['target'], row['signals_count'], row['time_waiting'], row['analyst'], row['status']))
+
+    # Capacity: Ensure 3/3 saturation
+    cursor.execute('UPDATE capacity SET active_analysts = 3, max_analysts = 3, total_analysts = 3 WHERE id = 1')
+
+    conn.commit()
+    conn.close()
+
+    return {
+        'incident': get_incident_by_id('INC-001'),
+        'logs': inserted_logs,
+        'queue': get_queue_with_capacity(),
+        'stats': get_stats()
+    }
+

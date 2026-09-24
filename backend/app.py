@@ -16,7 +16,8 @@ from backend.models import (
     assign_incident,
     investigate_incident,
     close_incident,
-    get_queue_with_capacity
+    get_queue_with_capacity,
+    execute_attack_simulation
 )
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
@@ -152,14 +153,17 @@ def api_get_queue():
 
 @app.route('/api/start-simulation', methods=['POST'])
 def api_start_simulation():
-    """Trigger or reset attack simulation scenario (Phase 11 scaffolding, Phase 12 streaming)."""
+    """Trigger or reset attack simulation scenario (Phase 12)."""
     try:
-        # Return acknowledgment for Phase 11
+        result = execute_attack_simulation()
         return jsonify({
             'status': 'initiated',
-            'message': 'Attack simulation pipeline initialized',
-            'target_ip': '192.168.1.50',
-            'scenario': 'Credential Stuffing + Port Scan + Traffic Surge -> INC-001 Fusion'
+            'message': 'Attack simulation pipeline executed and fused into INC-001',
+            'scenario': 'Credential Stuffing + Port Scan + Traffic Surge -> INC-001 Fusion',
+            'incident': result['incident'],
+            'logs': result['logs'],
+            'queue': result['queue'],
+            'stats': result['stats']
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
