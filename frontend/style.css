@@ -778,26 +778,48 @@ body {
 .attack-timeline-container {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-  max-height: 220px;
+  gap: 0.5rem;
+  max-height: 240px;
   overflow-y: auto;
+  position: relative;
 }
 
 .timeline-node {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.85rem;
   background: var(--bg-surface);
-  border-radius: 5px;
-  border-left: 2px solid var(--cyber-blue);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--cyber-blue);
   font-size: 0.82rem;
+  transition: all var(--transition-fast);
+}
+
+.timeline-node:hover {
+  background: var(--bg-panel-hover);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.timeline-node.node-critical {
+  border-left-color: var(--sev-critical);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.timeline-node.node-high {
+  border-left-color: var(--sev-high);
+}
+
+.timeline-node.node-medium {
+  border-left-color: var(--sev-medium);
 }
 
 .timeline-time {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .timeline-event {
@@ -805,14 +827,28 @@ body {
   color: #ffffff;
 }
 
+.timeline-ip {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cyber-cyan);
+}
+
 .timeline-stage {
   margin-left: auto;
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
   padding: 0.15rem 0.45rem;
   border-radius: 3px;
   background: rgba(14, 165, 233, 0.15);
   color: var(--cyber-blue);
+  white-space: nowrap;
 }
+
+.timeline-stage.stage-recon { color: var(--cyber-cyan); background: rgba(0, 210, 255, 0.12); }
+.timeline-stage.stage-access { color: var(--text-yellow); background: rgba(234, 179, 8, 0.12); }
+.timeline-stage.stage-anomaly { color: var(--text-orange); background: rgba(249, 115, 22, 0.12); }
+.timeline-stage.stage-escalation { color: var(--text-red); background: rgba(239, 68, 68, 0.15); }
 
 /* --------------------------------------------------------------------------
    10. PANEL 3: SOC RESPONSE QUEUE & CAPACITY

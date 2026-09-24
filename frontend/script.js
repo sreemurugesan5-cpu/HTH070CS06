@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * SOC-FUSION — Signal-Fused Intrusion Detection & Response Dashboard
- * Phase 8: SOC Response Queue & Capacity-Constrained Prioritization
+ * Phase 9: Attack Timeline & Chronological Multi-Stage Progression
  * ==========================================================================
  */
 
@@ -400,7 +400,9 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   console.log(`[SOC-FUSION] Incident selected: ${incident.id} (${incident.incident_type})`);
 
+  // Dynamically update the Signal Fusion Engine & Attack Timeline components
   renderSignalFusionVisualizer(incident);
+  renderAttackTimeline(incident);
 
   document.dispatchEvent(new CustomEvent('soc:incident-selected', {
     detail: { incident, triggerModalOpen }
@@ -553,14 +555,107 @@ function renderSignalFusionVisualizer(incident) {
 
 /**
  * ==========================================================================
- * SOC RESPONSE QUEUE & CAPACITY COMPONENT (PHASE 8)
+ * ATTACK TIMELINE & PROGRESSION (PHASE 9)
  * ==========================================================================
  */
 
 /**
- * Build a single response queue card
- * @param {Object} item Queue item
- * @returns {HTMLElement}
+ * Render chronological attack timeline showing event sequence, host, and stage
+ * @param {Object} incident Incident record
+ */
+function renderAttackTimeline(incident) {
+  const container = document.getElementById('attack-timeline-container');
+  if (!container) return;
+
+  if (!incident) {
+    container.innerHTML = '<div class="timeline-empty-state">Timeline awaiting incident selection.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // Determine timeline steps: use custom incident timeline or generate dynamic steps
+  let timelineSteps = incident.timeline;
+  if (!timelineSteps || timelineSteps.length === 0) {
+    if (incident.id === 'INC-001') {
+      timelineSteps = [
+        { time: '10:31:12', event: 'PORT SCAN', ip: incident.source_ip, stage: 'Reconnaissance', type: 'stage-recon', sev: 'medium' },
+        { time: '10:31:14', event: 'FAILED LOGIN', ip: incident.source_ip, stage: 'Initial Access', type: 'stage-access', sev: 'high' },
+        { time: '10:31:16', event: 'FAILED LOGIN', ip: incident.source_ip, stage: 'Brute Force', type: 'stage-access', sev: 'high' },
+        { time: '10:31:18', event: 'TRAFFIC SPIKE', ip: incident.source_ip, stage: 'Anomaly Detected', type: 'stage-anomaly', sev: 'high' },
+        { time: '10:31:20', event: 'COMPOSITE INCIDENT', ip: incident.source_ip, stage: 'Signal Fusion', type: 'stage-escalation', sev: 'critical' },
+        { time: '10:31:21', event: 'CRITICAL ESCALATION', ip: incident.source_ip, stage: 'SOC Priority #1', type: 'stage-escalation', sev: 'critical' }
+      ];
+    } else {
+      timelineSteps = [];
+      const signals = incident.signals || ['TELEMETRY_ANOMALY'];
+      const baseTime = incident.first_seen || '10:20:00';
+      
+      signals.forEach((sig, i) => {
+        timelineSteps.push({
+          time: baseTime,
+          event: sig.replace(/_/g, ' '),
+          ip: incident.source_ip,
+          stage: i === 0 ? 'Reconnaissance' : (i < signals.length - 1 ? 'Execution' : 'Pre-Exfiltration'),
+          type: i === 0 ? 'stage-recon' : 'stage-anomaly',
+          sev: (incident.severity || 'low').toLowerCase()
+        });
+      });
+
+      timelineSteps.push({
+        time: incident.last_seen || '10:30:00',
+        event: `COMPOSITE INCIDENT (${incident.incident_type})`,
+        ip: incident.source_ip,
+        stage: 'Signal Fusion',
+        type: 'stage-escalation',
+        sev: (incident.severity || 'low').toLowerCase()
+      });
+
+      timelineSteps.push({
+        time: incident.last_seen || '10:30:01',
+        event: `${(incident.severity || 'CRITICAL').toUpperCase()} ESCALATION`,
+        ip: incident.source_ip,
+        stage: `Priority Queue (Risk ${incident.risk_score})`,
+        type: 'stage-escalation',
+        sev: (incident.severity || 'low').toLowerCase()
+      });
+    }
+  }
+
+  timelineSteps.forEach(step => {
+    const node = document.createElement('div');
+    const sevClass = (step.sev === 'critical') ? 'node-critical' : (step.sev === 'high') ? 'node-high' : 'node-medium';
+    node.className = `timeline-node ${sevClass}`;
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'timeline-time';
+    timeEl.textContent = step.time;
+
+    const eventEl = document.createElement('span');
+    eventEl.className = 'timeline-event';
+    eventEl.textContent = step.event;
+
+    const ipEl = document.createElement('span');
+    ipEl.className = 'timeline-ip';
+    ipEl.textContent = step.ip;
+
+    const stageEl = document.createElement('span');
+    stageEl.className = `timeline-stage ${step.type || 'stage-recon'}`;
+    stageEl.textContent = step.stage;
+
+    node.appendChild(timeEl);
+    node.appendChild(eventEl);
+    node.appendChild(ipEl);
+    node.appendChild(stageEl);
+
+    container.appendChild(node);
+  });
+}
+
+/**
+ * ==========================================================================
+ * SOC RESPONSE QUEUE & CAPACITY COMPONENT
+ * ==========================================================================
  */
 function createQueueItemElement(item) {
   const card = document.createElement('div');
@@ -568,16 +663,13 @@ function createQueueItemElement(item) {
   card.className = `queue-item${isWaiting ? ' queue-waiting' : ''}`;
   card.dataset.id = item.incident_id;
 
-  // Rank badge
   const rankEl = document.createElement('div');
   rankEl.className = 'queue-rank';
   rankEl.textContent = `#${item.rank}`;
 
-  // Content Details
   const detailsEl = document.createElement('div');
   detailsEl.className = 'queue-details';
 
-  // Title row: ID, Severity Badge, Risk Score
   const titleRow = document.createElement('div');
   titleRow.className = 'queue-title-row';
 
@@ -608,7 +700,6 @@ function createQueueItemElement(item) {
   titleRow.appendChild(idSpan);
   titleRow.appendChild(rightMeta);
 
-  // Meta row: Assigned Analyst & Status Chip
   const metaRow = document.createElement('div');
   metaRow.className = 'queue-meta-row';
 
@@ -631,7 +722,6 @@ function createQueueItemElement(item) {
   card.appendChild(rankEl);
   card.appendChild(detailsEl);
 
-  // Interactivity: clicking a queue item selects the corresponding incident
   card.addEventListener('click', () => {
     const matchingIncident = state.incidents.find(inc => inc.id === item.incident_id);
     if (matchingIncident) {
@@ -642,18 +732,12 @@ function createQueueItemElement(item) {
   return card;
 }
 
-/**
- * Render the SOC Response Queue and Analyst Capacity Bar
- * @param {Array} queueList
- * @param {Object} capacityInfo
- */
 function renderResponseQueue(queueList, capacityInfo) {
   const container = document.getElementById('response-queue-container');
   const capText = document.getElementById('capacity-text');
   const capFill = document.getElementById('capacity-fill');
   const capSubtext = document.getElementById('capacity-subtext');
 
-  // 1. Update Analyst Capacity Visualization
   const active = capacityInfo?.active_analysts ?? 3;
   const max = capacityInfo?.max_analysts ?? 3;
   const ratio = max > 0 ? (active / max) : 1;
@@ -669,7 +753,6 @@ function renderResponseQueue(queueList, capacityInfo) {
     }
   }
 
-  // Count waiting items
   const waitingCount = (queueList || []).filter(item => (item.status || '').toUpperCase() === 'WAITING').length;
   if (capSubtext) {
     if (waitingCount > 0) {
@@ -681,7 +764,6 @@ function renderResponseQueue(queueList, capacityInfo) {
     }
   }
 
-  // 2. Render Queue Cards
   if (!container) return;
 
   if (!queueList || queueList.length === 0) {
@@ -754,7 +836,15 @@ async function fetchIncidents() {
             'Events occurred within correlation window'
           ],
           progression: ['Reconnaissance', 'Brute Force', 'Possible Exfiltration'],
-          recommended_action: 'Investigate source host immediately. Isolate host if traffic exceeds threshold.'
+          recommended_action: 'Investigate source host immediately. Isolate host if traffic exceeds threshold.',
+          timeline: [
+            { time: '10:31:12', event: 'PORT SCAN', ip: '192.168.1.50', stage: 'Reconnaissance', type: 'stage-recon', sev: 'medium' },
+            { time: '10:31:14', event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Initial Access', type: 'stage-access', sev: 'high' },
+            { time: '10:31:16', event: 'FAILED LOGIN', ip: '192.168.1.50', stage: 'Brute Force', type: 'stage-access', sev: 'high' },
+            { time: '10:31:18', event: 'TRAFFIC SPIKE', ip: '192.168.1.50', stage: 'Anomaly Detected', type: 'stage-anomaly', sev: 'high' },
+            { time: '10:31:20', event: 'COMPOSITE INCIDENT', ip: '192.168.1.50', stage: 'Signal Fusion', type: 'stage-escalation', sev: 'critical' },
+            { time: '10:31:21', event: 'CRITICAL ESCALATION', ip: '192.168.1.50', stage: 'SOC Priority #1', type: 'stage-escalation', sev: 'critical' }
+          ]
         },
         {
           id: 'INC-004',
@@ -774,7 +864,13 @@ async function fetchIncidents() {
             'Behavior matches automated Hydra spray tool'
           ],
           progression: ['Account Enumeration', 'Credential Stuffing', 'Target Takeover Attempt'],
-          recommended_action: 'Enforce MFA lock and rate limit source subnet.'
+          recommended_action: 'Enforce MFA lock and rate limit source subnet.',
+          timeline: [
+            { time: '10:28:40', event: 'AUTH BURST', ip: '10.0.12.8', stage: 'Enumeration', type: 'stage-recon', sev: 'high' },
+            { time: '10:29:15', event: 'INVALID USER SURGE', ip: '10.0.12.8', stage: 'Credential Stuffing', type: 'stage-access', sev: 'high' },
+            { time: '10:30:10', event: 'DISTRIBUTED PROXY', ip: '10.0.12.8', stage: 'Proxy Evasion', type: 'stage-anomaly', sev: 'high' },
+            { time: '10:31:05', event: 'CRITICAL ESCALATION', ip: '10.0.12.8', stage: 'SOC Priority #2', type: 'stage-escalation', sev: 'critical' }
+          ]
         },
         {
           id: 'INC-007',
@@ -793,7 +889,13 @@ async function fetchIncidents() {
             'Encrypted traffic to unclassified external IP'
           ],
           progression: ['Internal Discovery', 'Staging', 'Exfiltration Trigger'],
-          recommended_action: 'Terminate egress socket and capture packet dumps.'
+          recommended_action: 'Terminate egress socket and capture packet dumps.',
+          timeline: [
+            { time: '10:25:10', event: 'INTERNAL DISCOVERY', ip: '172.16.4.19', stage: 'Reconnaissance', type: 'stage-recon', sev: 'medium' },
+            { time: '10:27:30', event: 'LARGE OUTBOUND CONN', ip: '172.16.4.19', stage: 'Staging', type: 'stage-anomaly', sev: 'high' },
+            { time: '10:29:45', event: 'UNUSUAL PORT EGRESS', ip: '172.16.4.19', stage: 'Exfiltration Trigger', type: 'stage-anomaly', sev: 'high' },
+            { time: '10:29:50', event: 'HIGH ESCALATION', ip: '172.16.4.19', stage: 'SOC Priority #3', type: 'stage-escalation', sev: 'high' }
+          ]
         },
         {
           id: 'INC-009',
@@ -974,7 +1076,6 @@ async function updateIncidentStatus(newStatus) {
     state.incidents[idx].status = newStatus;
   }
 
-  // Update in response queue as well
   const qIdx = state.queue.findIndex(item => item.incident_id === incidentId);
   if (qIdx !== -1) {
     state.queue[qIdx].status = newStatus;
@@ -1140,6 +1241,9 @@ window.socDashboard = {
   renderFusion: (incident) => {
     renderSignalFusionVisualizer(incident || state.selectedIncident);
   },
+  renderTimeline: (incident) => {
+    renderAttackTimeline(incident || state.selectedIncident);
+  },
   updateCapacity: (active, max) => {
     state.capacity.active_analysts = active;
     state.capacity.max_analysts = max;
@@ -1152,7 +1256,7 @@ window.socDashboard = {
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 8: SOC Response Queue & Capacity Prioritization...');
+  console.log('[SOC-FUSION] Initializing Phase 9: Attack Timeline & Progression...');
   initClock();
   initModalListeners();
   fetchStats();
