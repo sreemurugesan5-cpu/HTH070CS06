@@ -25,6 +25,7 @@
 
     <nav class="nav-links" aria-label="Main Navigation">
       <a href="#dashboard" class="nav-link active">Dashboard</a>
+      <a href="#ip-intelligence" class="nav-link">IP Intelligence</a>
       <a href="#incidents" class="nav-link">Incidents</a>
       <a href="#events" class="nav-link">Events</a>
       <a href="#response-queue" class="nav-link">Response Queue</a>
@@ -100,6 +101,41 @@
           <span class="card-label">CRITICAL INCIDENTS</span>
           <span class="card-value" id="stat-critical-incidents">--</span>
           <span class="card-trend text-red" id="trend-critical-incidents">Action required</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------- -->
+    <!-- IP THREAT INTELLIGENCE & DEEP SEARCH               -->
+    <!-- -------------------------------------------------- -->
+    <section class="ip-search-section" id="ip-intelligence" aria-label="IP Threat Intelligence Search">
+      <div class="ip-search-card">
+        <div class="ip-search-header">
+          <div class="ip-search-title">
+            <span class="ip-search-icon">🔍</span>
+            <span>IP THREAT INTELLIGENCE &amp; DEEP SEARCH</span>
+          </div>
+          <span class="ip-search-hint">Query any IP to retrieve full telemetry logs, detected signals, composite incidents, and containment actions</span>
+        </div>
+        <div class="ip-search-form">
+          <div class="ip-input-wrapper">
+            <span class="input-icon">⚡</span>
+            <input type="text" id="input-ip-search" class="input-ip-search" placeholder="Enter any IP address (e.g. 192.168.1.50, 10.0.12.8, 172.16.4.19, 45.33.32.156)..." aria-label="IP Address Search" />
+          </div>
+          <button id="btn-ip-search" class="btn-ip-search" type="button">
+            ANALYZE IP
+          </button>
+        </div>
+        <div class="quick-ip-container">
+          <span class="quick-ip-label">QUICK TARGETS:</span>
+          <div class="quick-ip-tags" id="quick-ip-tags">
+            <button type="button" class="ip-tag-chip tag-critical" data-ip="192.168.1.50">192.168.1.50 <span class="tag-meta">CRITICAL</span></button>
+            <button type="button" class="ip-tag-chip tag-critical" data-ip="10.0.12.8">10.0.12.8 <span class="tag-meta">SQLi</span></button>
+            <button type="button" class="ip-tag-chip tag-high" data-ip="172.16.4.19">172.16.4.19 <span class="tag-meta">C2 Beacon</span></button>
+            <button type="button" class="ip-tag-chip tag-high" data-ip="192.168.2.105">192.168.2.105 <span class="tag-meta">PrivEsc</span></button>
+            <button type="button" class="ip-tag-chip tag-medium" data-ip="10.200.5.44">10.200.5.44 <span class="tag-meta">Probe</span></button>
+          </div>
+          <button id="btn-clear-ip-filter" class="btn-clear-filter hidden" type="button">✖ Clear Filter</button>
         </div>
       </div>
     </section>
@@ -328,6 +364,117 @@
         <button id="btn-assign-incident" type="button" class="btn btn-assign">ASSIGN</button>
         <button id="btn-investigating-incident" type="button" class="btn btn-investigating">MARK INVESTIGATING</button>
         <button id="btn-close-incident" type="button" class="btn btn-close-alert">CLOSE INCIDENT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================== -->
+  <!-- IP THREAT INTELLIGENCE DOSSIER MODAL               -->
+  <!-- ================================================== -->
+  <div id="ip-intelligence-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ip-title" aria-hidden="true">
+    <div class="modal-dialog ip-modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-ip-title">
+          <span>IP THREAT INTELLIGENCE DOSSIER — <span id="ip-modal-address" class="text-cyan">0.0.0.0</span></span>
+        </div>
+        <button id="btn-close-ip-modal" class="btn-modal-close" type="button" aria-label="Close IP Intelligence Dossier">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Threat Verdict & Risk Gauge Banner -->
+        <div class="ip-verdict-banner" id="ip-verdict-banner">
+          <div class="ip-verdict-left">
+            <span class="ip-verdict-badge" id="ip-verdict-badge">ANALYZING HOST</span>
+            <span class="ip-verdict-desc" id="ip-verdict-desc">Awaiting IP threat query...</span>
+          </div>
+          <div class="ip-risk-gauge">
+            <span class="ip-risk-label">COMPOSITE RISK</span>
+            <span class="ip-risk-score" id="ip-risk-score">--</span>
+          </div>
+        </div>
+
+        <!-- Section: IP Network & Telemetry Details -->
+        <div class="modal-section-grid">
+          <div class="meta-field">
+            <span class="meta-label">IP Address:</span>
+            <span class="meta-value text-cyan" id="ip-meta-address">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Network Type:</span>
+            <span class="meta-value" id="ip-meta-network">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Targeted Host:</span>
+            <span class="meta-value" id="ip-meta-target">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Total Events:</span>
+            <span class="meta-value" id="ip-meta-events">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Signals Count:</span>
+            <span class="meta-value" id="ip-meta-signals-count">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Composite Incident:</span>
+            <span class="meta-value" id="ip-meta-incident">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">First Seen:</span>
+            <span class="meta-value" id="ip-meta-first-seen">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Last Seen:</span>
+            <span class="meta-value" id="ip-meta-last-seen">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Database Record:</span>
+            <span class="meta-value" id="ip-meta-db-status">--</span>
+          </div>
+        </div>
+
+        <!-- Section: Correlated Signals -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">DETECTED SIGNALS &amp; ATTACK SIGNATURES</h3>
+          <div id="ip-modal-signals" class="ip-signals-tags">
+            <span class="text-neutral">No correlated signals detected for this host.</span>
+          </div>
+        </div>
+
+        <!-- Section: Associated Security Events / Logs -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">ASSOCIATED SECURITY TELEMETRY LOGS (<span id="ip-modal-logs-count">0</span>)</h3>
+          <div class="table-responsive ip-logs-table-wrap">
+            <table class="soc-table ip-logs-table">
+              <thead>
+                <tr>
+                  <th>TIME</th>
+                  <th>EVENT TYPE</th>
+                  <th>SIGNAL</th>
+                  <th>SEVERITY</th>
+                  <th>ACTION</th>
+                  <th>DETAILS</th>
+                </tr>
+              </thead>
+              <tbody id="ip-modal-logs-body">
+                <tr><td colspan="6" class="text-center text-neutral">No historical logs associated with this IP.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section: Recommended Containment Action -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">RECOMMENDED CONTAINMENT ACTION</h3>
+          <div id="ip-modal-recommended-action" class="recommended-action-box">
+            Apply perimeter firewall containment rules.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-filter-by-ip" type="button" class="btn btn-assign">⚡ FILTER DASHBOARD TO THIS IP</button>
+        <button id="btn-close-ip-dossier" type="button" class="btn btn-close-alert">CLOSE</button>
       </div>
     </div>
   </div>

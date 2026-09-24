@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-from backend.database import init_db
+from backend.database import init_db, query_ip_intelligence
 from backend.models import (
     get_stats,
     get_logs,
@@ -165,6 +165,15 @@ def api_start_simulation():
             'queue': result['queue'],
             'stats': result['stats']
         }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ip/<path:ip_address>', methods=['GET', 'POST'])
+def api_lookup_ip(ip_address):
+    """Retrieve full intelligence dossier and telemetry for a specific IP address."""
+    try:
+        data = query_ip_intelligence(ip_address)
+        return jsonify(data), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

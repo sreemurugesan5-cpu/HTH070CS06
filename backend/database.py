@@ -403,6 +403,112 @@ def init_db(force_reseed=False):
     conn.commit()
     conn.close()
 
+def query_ip_intelligence(ip_address):
+    """Query complete telemetry, logs, and incidents for a given IP address."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    ip_cleaned = str(ip_address).strip()
+
+    # Query all events/logs for this IP
+    cursor.execute('''
+        SELECT id, timestamp, source_ip, event_type, signal, severity, action, details
+        FROM logs
+        WHERE source_ip = ?
+        ORDER BY id DESC
+    ''', (ip_cleaned,))
+    logs = [dict(row) for row in cursor.fetchall()]
+
+    # Query all incidents for this IP
+    cursor.execute('''
+        SELECT * FROM incidents
+        WHERE source_ip = ?
+    ''', (ip_cleaned,))
+    incident_rows = cursor.fetchall()
+    incidents = []
+    for row in incident_rows:
+        inc_dict = dict(row)
+        for json_field in ['signals', 'correlation_reasons', 'attack_steps', 'recommended_actions', 'timeline']:
+            if inc_dict.get(json_field):
+                try:
+                    inc_dict[json_field] = json.loads(inc_dict[json_field])
+                except Exception:
+                    pass
+        incidents.append(inc_dict)
+
+    conn.close()
+
+    # Network classification
+    is_private = (
+        ip_cleaned.startswith('10.') or 
+        ip_cleaned.startswith('192.168.') or 
+        (ip_cleaned.startswith('172.') and len(ip_cleaned.split('.')) > 1 and 16 <= int(ip_cleaned.split('.')[1]) <= 31) or
+        ip_cleaned == '127.0.0.1' or ip_cleaned == 'localhost'
+    )
+    network_type = "Private Subnet (RFC 1918)" if is_private else "Public WAN / External Host"
+
+    # Correlate signals
+    signals_detected = set()
+    for l in logs:
+        if l.get('signal'):
+            signals_detected.add(l['signal'])
+        if l.get('event_type'):
+            signals_detected.add(l['event_type'])
+
+    for inc in incidents:
+        if isinstance(inc.get('signals'), list):
+            for s in inc['signals']:
+                signals_detected.add(s)
+
+    max_risk = 0
+    primary_incident = incidents[0] if incidents else None
+    if primary_incident:
+        max_risk = primary_incident.get('risk_score', 80)
+        verdict = f"{primary_incident.get('severity', 'HIGH')} THREAT ({primary_incident.get('incident_type', 'ATTACK')})"
+    elif logs:
+        has_critical = any(l.get('severity') == 'CRITICAL' for l in logs)
+        has_high = any(l.get('severity') == 'HIGH' for l in logs)
+        if has_critical:
+            max_risk = 85
+            verdict = "CRITICAL RISK (CORRELATED TELEMETRY ANOMALY)"
+        elif has_high:
+            max_risk = 72
+            verdict = "HIGH SUSPICIOUS (ANOMALOUS EVENTS DETECTED)"
+        else:
+            max_risk = 45
+            verdict = "MEDIUM SUSPICIOUS (PROBE / RECONNAISSANCE)"
+    else:
+        max_risk = 12 if not is_private else 8
+        verdict = "CLEAN / BENIGN (NO THREAT ACTIVITY DETECTED)"
+
+    first_seen = primary_incident.get('first_seen') if primary_incident else (logs[-1]['timestamp'] if logs else 'N/A')
+    last_seen = primary_incident.get('last_seen') if primary_incident else (logs[0]['timestamp'] if logs else 'N/A')
+    target = primary_incident.get('target') if primary_incident else ("Auth / Firewall Gateway" if logs else "Unclassified Subnet")
+
+    rec_action = (
+        primary_incident.get('recommended_actions', ['Apply rate-limiting and monitor egress traffic.'])[0]
+        if (primary_incident and primary_incident.get('recommended_actions'))
+        else ("Isolate host at perimeter firewall immediately." if max_risk > 70 else ("Rate limit source IP and monitor active connections." if max_risk > 30 else "Host is benign. Continue baseline SOC monitoring."))
+    )
+
+    return {
+        'ip': ip_cleaned,
+        'found_in_database': bool(logs or incidents),
+        'network_type': network_type,
+        'risk_score': max_risk,
+        'threat_verdict': verdict,
+        'total_events': len(logs),
+        'signals_count': len(signals_detected),
+        'signals': sorted(list(signals_detected)),
+        'first_seen': first_seen,
+        'last_seen': last_seen,
+        'target': target,
+        'incident': primary_incident,
+        'incidents': incidents,
+        'logs': logs,
+        'recommended_action': rec_action
+    }
+
 if __name__ == '__main__':
     init_db(force_reseed=True)
     print("Database re-initialized and seeded successfully at:", DB_PATH)

@@ -1707,6 +1707,337 @@ tr:focus-visible {
 }
 
 /* --------------------------------------------------------------------------
+   15. IP THREAT INTELLIGENCE & DEEP SEARCH
+   -------------------------------------------------------------------------- */
+.ip-search-section {
+  width: 100%;
+}
+
+.ip-search-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ip-search-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #0284c7 0%, #00d2ff 50%, #38bdf8 100%);
+}
+
+.ip-search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ip-search-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--cyber-cyan);
+}
+
+.ip-search-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ip-search-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.ip-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--cyber-cyan);
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+
+.input-ip-search {
+  width: 100%;
+  background: var(--bg-surface);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  padding: 0.75rem 1rem 0.75rem 2.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  color: #ffffff;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.input-ip-search:focus {
+  border-color: var(--cyber-cyan);
+  box-shadow: 0 0 14px rgba(0, 210, 255, 0.35);
+  background: rgba(14, 23, 42, 0.95);
+}
+
+.input-ip-search::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+
+.btn-ip-search {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: 1px solid #38bdf8;
+  padding: 0.75rem 1.6rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  box-shadow: 0 0 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-ip-search:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.6);
+  transform: translateY(-1px);
+}
+
+.btn-ip-search:active {
+  transform: translateY(0);
+}
+
+.quick-ip-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.quick-ip-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.quick-ip-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ip-tag-chip {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: #ffffff;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+}
+
+.ip-tag-chip:hover {
+  border-color: var(--cyber-cyan);
+  background: rgba(56, 189, 248, 0.12);
+  transform: translateY(-1px);
+}
+
+.tag-meta {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.tag-critical .tag-meta {
+  background: rgba(239, 68, 68, 0.25);
+  color: var(--text-red);
+}
+
+.tag-high .tag-meta {
+  background: rgba(249, 115, 22, 0.25);
+  color: var(--text-orange);
+}
+
+.tag-medium .tag-meta {
+  background: rgba(234, 179, 8, 0.25);
+  color: var(--text-yellow);
+}
+
+.btn-clear-filter {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--sev-critical-border);
+  color: #fca5a5;
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all var(--transition-fast);
+}
+
+.btn-clear-filter:hover {
+  background: var(--sev-critical);
+  color: #ffffff;
+}
+
+/* IP Dossier Modal Specifics */
+.ip-modal-dialog {
+  max-width: 880px;
+}
+
+.ip-verdict-banner {
+  background: rgba(14, 23, 42, 0.95);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1.15rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ip-verdict-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.ip-verdict-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.verdict-critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--text-red);
+  border: 1px solid var(--sev-critical-border);
+}
+
+.verdict-high {
+  background: rgba(249, 115, 22, 0.2);
+  color: var(--text-orange);
+  border: 1px solid var(--sev-high-border);
+}
+
+.verdict-medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: var(--text-yellow);
+  border: 1px solid var(--sev-medium-border);
+}
+
+.verdict-clean {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--text-green);
+  border: 1px solid var(--sev-low-border);
+}
+
+.ip-verdict-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.ip-risk-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+}
+
+.ip-risk-label {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.ip-risk-score {
+  font-family: var(--font-mono);
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ip-signals-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.ip-signal-chip {
+  background: var(--bg-surface);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--cyber-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+}
+
+.ip-logs-table-wrap {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+.ip-logs-table td {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
+}
+
+.ip-logs-table th {
+  padding: 0.6rem 0.9rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel-header);
+  z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
    14. RESPONSIVE BREAKPOINTS & MOBILE OPTIMIZATIONS
    -------------------------------------------------------------------------- */
 @media (max-width: 1400px) {

@@ -49,7 +49,8 @@ const state = {
     max_analysts: 3
   },
   isOnline: true,
-  isSimulating: false
+  isSimulating: false,
+  activeIpFilter: null
 };
 
 // Active Chart Instances Storage (prevents memory leakage and canvas resize bugs)
@@ -204,25 +205,28 @@ function renderEventStream(logs, prependNew = false) {
   const countBadge = document.getElementById('event-stream-count');
   if (!container) return;
 
-  if (!logs || logs.length === 0) {
-    if (container.children.length === 0 || container.querySelector('.event-skeleton-item')) {
-      container.innerHTML = `
-        <div class="cyber-empty-state stream-empty-state">
-          <div class="empty-state-icon">📡</div>
-          <div class="empty-state-title">NO SECURITY EVENTS INGESTED</div>
-          <div class="empty-state-desc">The live event pipeline is awaiting telemetry ingest or attack simulation trigger.</div>
-        </div>
-      `;
-    }
+  const filteredLogs = state.activeIpFilter
+    ? (logs || []).filter(l => l.source_ip === state.activeIpFilter)
+    : logs;
+
+  if (!filteredLogs || filteredLogs.length === 0) {
+    container.innerHTML = `
+      <div class="cyber-empty-state stream-empty-state">
+        <div class="empty-state-icon">📡</div>
+        <div class="empty-state-title">${state.activeIpFilter ? 'NO EVENTS FOR THIS IP' : 'NO SECURITY EVENTS INGESTED'}</div>
+        <div class="empty-state-desc">${state.activeIpFilter ? `No real-time telemetry matching host ${state.activeIpFilter}.` : 'The live event pipeline is awaiting telemetry ingest or attack simulation trigger.'}</div>
+      </div>
+    `;
+    if (countBadge) countBadge.textContent = '0 Events';
     return;
   }
 
   const emptyPlaceholder = container.querySelector('.stream-empty-state, .cyber-empty-state, .event-skeleton-item');
   if (emptyPlaceholder) container.innerHTML = '';
 
-  if (prependNew) {
-    for (let i = logs.length - 1; i >= 0; i--) {
-      const log = logs[i];
+  if (prependNew && !state.activeIpFilter) {
+    for (let i = filteredLogs.length - 1; i >= 0; i--) {
+      const log = filteredLogs[i];
       const logKey = log.id || `${log.timestamp}-${log.source_ip}-${log.event_type}`;
       if (!state.knownLogIds.has(logKey)) {
         state.knownLogIds.add(logKey);
@@ -233,7 +237,7 @@ function renderEventStream(logs, prependNew = false) {
   } else {
     container.innerHTML = '';
     state.knownLogIds.clear();
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       const logKey = log.id || `${log.timestamp}-${log.source_ip}-${log.event_type}`;
       state.knownLogIds.add(logKey);
       const card = createEventItemElement(log, false);
@@ -390,14 +394,18 @@ function renderIncidentsTable(incidents) {
   const tbody = document.getElementById('incidents-table-body');
   if (!tbody) return;
 
-  if (!incidents || incidents.length === 0) {
+  const filteredIncidents = state.activeIpFilter 
+    ? (incidents || []).filter(i => i.source_ip === state.activeIpFilter)
+    : incidents;
+
+  if (!filteredIncidents || filteredIncidents.length === 0) {
     tbody.innerHTML = `
       <tr class="table-empty-row">
         <td colspan="9">
           <div class="empty-table-wrap cyber-empty-state">
             <div class="empty-state-icon">🛡️</div>
-            <div class="empty-state-title">NO COMPOSITE INCIDENTS DETECTED</div>
-            <div class="empty-state-desc">Weak signals have not crossed the correlation threshold to form an incident dossier.</div>
+            <div class="empty-state-title">${state.activeIpFilter ? 'NO INCIDENTS FOR THIS IP' : 'NO COMPOSITE INCIDENTS DETECTED'}</div>
+            <div class="empty-state-desc">${state.activeIpFilter ? `No composite security incidents recorded for host ${state.activeIpFilter}.` : 'Weak signals have not crossed the correlation threshold to form an incident dossier.'}</div>
           </div>
         </td>
       </tr>
@@ -406,13 +414,13 @@ function renderIncidentsTable(incidents) {
   }
 
   tbody.innerHTML = '';
-  incidents.forEach(incident => {
+  filteredIncidents.forEach(incident => {
     const tr = createIncidentRowElement(incident);
     tbody.appendChild(tr);
   });
 
-  if (!state.selectedIncidentId && incidents.length > 0) {
-    selectIncident(incidents[0], false);
+  if (!state.selectedIncidentId && filteredIncidents.length > 0) {
+    selectIncident(filteredIncidents[0], false);
   }
 
   // Update dynamic charts whenever incident data updates
@@ -1940,6 +1948,242 @@ async function triggerAttackSimulation() {
   }
 }
 
+/**
+ * ==========================================================================
+ * IP THREAT INTELLIGENCE & DEEP SEARCH CONTROLLER
+ * ==========================================================================
+ */
+let currentAnalyzedIP = null;
+
+async function lookupIPIntelligence(ipAddress) {
+  if (!ipAddress || typeof ipAddress !== 'string') return;
+  const ip = ipAddress.trim();
+  if (!ip) return;
+
+  currentAnalyzedIP = ip;
+  console.log(`[SOC-FUSION] Analyzing IP Threat Intelligence for: ${ip}`);
+
+  let intelData = null;
+
+  try {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/api/ip/${encodeURIComponent(ip)}`);
+    if (response.ok) {
+      intelData = await response.json();
+    }
+  } catch (err) {
+    console.warn('[SOC-FUSION] Live backend IP intelligence lookup unavailable, computing locally:', err);
+  }
+
+  // Fallback: Compute intelligence locally from active state if backend not reached
+  if (!intelData) {
+    const matchingLogs = (state.logs || []).filter(l => l.source_ip === ip);
+    const matchingIncidents = (state.incidents || []).filter(i => i.source_ip === ip);
+    const isPrivate = ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.') || ip === '127.0.0.1';
+
+    const signals = new Set();
+    matchingLogs.forEach(l => {
+      if (l.signal) signals.add(l.signal);
+      if (l.event_type) signals.add(l.event_type);
+    });
+    matchingIncidents.forEach(inc => {
+      if (Array.isArray(inc.signals)) inc.signals.forEach(s => signals.add(s));
+    });
+
+    const primaryIncident = matchingIncidents[0] || null;
+    const maxRisk = primaryIncident ? (primaryIncident.risk_score || 80) : (matchingLogs.length > 0 ? 65 : 10);
+    const verdict = primaryIncident 
+      ? `${primaryIncident.severity || 'HIGH'} THREAT (${primaryIncident.incident_type || 'ATTACK'})`
+      : (matchingLogs.length > 0 ? 'SUSPICIOUS HOST (LOGGED ANOMALIES)' : 'CLEAN / BENIGN (NO ACTIVE THREATS)');
+
+    intelData = {
+      ip: ip,
+      found_in_database: matchingLogs.length > 0 || matchingIncidents.length > 0,
+      network_type: isPrivate ? 'Private Subnet (RFC 1918)' : 'Public WAN / External Host',
+      risk_score: maxRisk,
+      threat_verdict: verdict,
+      total_events: matchingLogs.length,
+      signals_count: signals.size,
+      signals: Array.from(signals),
+      first_seen: primaryIncident?.first_seen || (matchingLogs[matchingLogs.length - 1]?.timestamp || 'N/A'),
+      last_seen: primaryIncident?.last_seen || (matchingLogs[0]?.timestamp || 'N/A'),
+      target: primaryIncident?.target || 'Corporate Network Boundary',
+      incident: primaryIncident,
+      logs: matchingLogs,
+      recommended_action: primaryIncident?.recommended_action || (maxRisk > 60 ? 'Isolate host at boundary firewall immediately.' : 'Maintain baseline perimeter monitoring.')
+    };
+  }
+
+  renderIPModal(intelData);
+}
+
+function renderIPModal(data) {
+  const modal = document.getElementById('ip-intelligence-modal');
+  if (!modal) return;
+
+  const addrTitle = document.getElementById('ip-modal-address');
+  const verdictBadge = document.getElementById('ip-verdict-badge');
+  const verdictDesc = document.getElementById('ip-verdict-desc');
+  const riskScore = document.getElementById('ip-risk-score');
+
+  const metaAddress = document.getElementById('ip-meta-address');
+  const metaNetwork = document.getElementById('ip-meta-network');
+  const metaTarget = document.getElementById('ip-meta-target');
+  const metaEvents = document.getElementById('ip-meta-events');
+  const metaSignalsCount = document.getElementById('ip-meta-signals-count');
+  const metaIncident = document.getElementById('ip-meta-incident');
+  const metaFirstSeen = document.getElementById('ip-meta-first-seen');
+  const metaLastSeen = document.getElementById('ip-meta-last-seen');
+  const metaDbStatus = document.getElementById('ip-meta-db-status');
+
+  const signalsContainer = document.getElementById('ip-modal-signals');
+  const logsBody = document.getElementById('ip-modal-logs-body');
+  const logsCount = document.getElementById('ip-modal-logs-count');
+  const recAction = document.getElementById('ip-modal-recommended-action');
+
+  if (addrTitle) addrTitle.textContent = data.ip;
+  if (metaAddress) metaAddress.textContent = data.ip;
+  if (metaNetwork) metaNetwork.textContent = data.network_type;
+  if (metaTarget) metaTarget.textContent = data.target || 'Multiple Gateways';
+  if (metaEvents) metaEvents.textContent = `${data.total_events} Event${data.total_events === 1 ? '' : 's'}`;
+  if (metaSignalsCount) metaSignalsCount.textContent = `${data.signals_count} Signal${data.signals_count === 1 ? '' : 's'}`;
+  if (metaIncident) metaIncident.textContent = data.incident ? `${data.incident.id} (${data.incident.incident_type || data.incident.severity})` : 'None Correlated';
+  if (metaFirstSeen) metaFirstSeen.textContent = data.first_seen || 'N/A';
+  if (metaLastSeen) metaLastSeen.textContent = data.last_seen || 'N/A';
+  if (metaDbStatus) {
+    metaDbStatus.textContent = data.found_in_database ? '✓ Recorded in Telemetry DB' : '⚪ New / External Unlogged Host';
+    metaDbStatus.style.color = data.found_in_database ? 'var(--text-orange)' : 'var(--text-muted)';
+  }
+
+  // Risk Score & Verdict
+  const score = data.risk_score ?? 0;
+  if (riskScore) {
+    riskScore.textContent = score;
+    riskScore.className = 'ip-risk-score';
+    if (score >= 80) riskScore.classList.add('text-red');
+    else if (score >= 60) riskScore.classList.add('text-orange');
+    else if (score >= 40) riskScore.classList.add('text-yellow');
+    else riskScore.classList.add('text-green');
+  }
+
+  if (verdictBadge) {
+    verdictBadge.textContent = data.threat_verdict;
+    verdictBadge.className = 'ip-verdict-badge';
+    if (score >= 80) verdictBadge.classList.add('verdict-critical');
+    else if (score >= 60) verdictBadge.classList.add('verdict-high');
+    else if (score >= 40) verdictBadge.classList.add('verdict-medium');
+    else verdictBadge.classList.add('verdict-clean');
+  }
+
+  if (verdictDesc) {
+    if (score >= 80) {
+      verdictDesc.textContent = 'High-confidence multi-stage attack signatures active. Priority containment advised.';
+    } else if (score >= 50) {
+      verdictDesc.textContent = 'Suspicious telemetry events or port probing identified from this host.';
+    } else {
+      verdictDesc.textContent = 'No malicious indicators or correlated composite incidents active.';
+    }
+  }
+
+  // Render Signals
+  if (signalsContainer) {
+    signalsContainer.innerHTML = '';
+    const signals = data.signals || [];
+    if (signals.length === 0) {
+      signalsContainer.innerHTML = '<span class="text-neutral">No correlated signals detected for this host.</span>';
+    } else {
+      signals.forEach(sig => {
+        const chip = document.createElement('span');
+        chip.className = 'ip-signal-chip';
+        chip.textContent = `📡 ${sig.replace(/_/g, ' ')}`;
+        signalsContainer.appendChild(chip);
+      });
+    }
+  }
+
+  // Render Logs Table
+  if (logsCount) logsCount.textContent = (data.logs || []).length;
+  if (logsBody) {
+    logsBody.innerHTML = '';
+    const logs = data.logs || [];
+    if (logs.length === 0) {
+      logsBody.innerHTML = '<tr><td colspan="6" class="text-center text-neutral" style="padding: 1.5rem;">No historical logs associated with this IP in telemetry store.</td></tr>';
+    } else {
+      logs.slice(0, 20).forEach(log => {
+        const tr = document.createElement('tr');
+        const sevKey = (log.severity || 'LOW').toLowerCase();
+        tr.innerHTML = `
+          <td class="table-id">${log.timestamp || '--'}</td>
+          <td><strong>${log.event_type || 'EVENT'}</strong></td>
+          <td><span class="badge-signals">${log.signal || 'TELEMETRY'}</span></td>
+          <td><span class="badge-sev badge-sev-${sevKey}">${(log.severity || 'LOW').toUpperCase()}</span></td>
+          <td>${log.action || 'LOGGED'}</td>
+          <td class="text-neutral" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis;">${log.details || '--'}</td>
+        `;
+        logsBody.appendChild(tr);
+      });
+    }
+  }
+
+  // Recommended Action
+  if (recAction) {
+    recAction.textContent = data.recommended_action || 'Maintain perimeter logging and firewall egress monitoring.';
+  }
+
+  openIPModal();
+}
+
+function openIPModal() {
+  const modal = document.getElementById('ip-intelligence-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeIPModal() {
+  const modal = document.getElementById('ip-intelligence-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function filterDashboardByIP(ip) {
+  if (!ip) return;
+  state.activeIpFilter = ip;
+  console.log(`[SOC-FUSION] Dashboard filtered to IP: ${ip}`);
+
+  const clearBtn = document.getElementById('btn-clear-ip-filter');
+  if (clearBtn) clearBtn.classList.remove('hidden');
+
+  const inputEl = document.getElementById('input-ip-search');
+  if (inputEl) inputEl.value = ip;
+
+  closeIPModal();
+  renderEventStream(state.logs, false);
+  renderIncidentsTable(state.incidents);
+
+  // If there's an incident matching this IP, select it
+  const matchingIncident = state.incidents.find(i => i.source_ip === ip);
+  if (matchingIncident) {
+    selectIncident(matchingIncident, false);
+  }
+}
+
+function clearIPFilter() {
+  state.activeIpFilter = null;
+  console.log('[SOC-FUSION] IP filter cleared, restoring full dashboard telemetry');
+
+  const clearBtn = document.getElementById('btn-clear-ip-filter');
+  if (clearBtn) clearBtn.classList.add('hidden');
+
+  const inputEl = document.getElementById('input-ip-search');
+  if (inputEl) inputEl.value = '';
+
+  renderEventStream(state.logs, false);
+  renderIncidentsTable(state.incidents);
+}
+
 window.socDashboard = {
   formatNumber: formatNumber,
   updateStats: (customStats) => {
@@ -1992,12 +2236,15 @@ window.socDashboard = {
   handleRetryConnection: handleRetryConnection,
   showOfflineAlert: showOfflineAlert,
   hideOfflineAlert: hideOfflineAlert,
+  lookupIP: lookupIPIntelligence,
+  filterByIP: filterDashboardByIP,
+  clearIPFilter: clearIPFilter,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 13: Loading Skeletons, Cyber Empty States, & Error Recovery...');
+  console.log('[SOC-FUSION] Initializing Phase 14 with IP Threat Intelligence & Deep Search...');
   initClock();
   initModalListeners();
   renderLoadingSkeletons();
@@ -2011,6 +2258,66 @@ document.addEventListener('DOMContentLoaded', () => {
   if (simBtn) {
     simBtn.addEventListener('click', triggerAttackSimulation);
   }
+
+  // IP Threat Intelligence Search & Filtering
+  const ipSearchInput = document.getElementById('input-ip-search');
+  const ipSearchBtn = document.getElementById('btn-ip-search');
+  const clearFilterBtn = document.getElementById('btn-clear-ip-filter');
+  const closeIpModalBtn = document.getElementById('btn-close-ip-modal');
+  const closeIpDossierBtn = document.getElementById('btn-close-ip-dossier');
+  const filterByIpBtn = document.getElementById('btn-filter-by-ip');
+  const ipModal = document.getElementById('ip-intelligence-modal');
+
+  if (ipSearchBtn && ipSearchInput) {
+    const executeSearch = () => {
+      const query = ipSearchInput.value.trim();
+      if (query) lookupIPIntelligence(query);
+    };
+    ipSearchBtn.addEventListener('click', executeSearch);
+    ipSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeSearch();
+      }
+    });
+  }
+
+  // Quick IP Target Tags
+  const quickTags = document.querySelectorAll('.ip-tag-chip');
+  quickTags.forEach(tag => {
+    tag.addEventListener('click', () => {
+      const ip = tag.dataset.ip;
+      if (ip) {
+        if (ipSearchInput) ipSearchInput.value = ip;
+        lookupIPIntelligence(ip);
+      }
+    });
+  });
+
+  if (clearFilterBtn) {
+    clearFilterBtn.addEventListener('click', clearIPFilter);
+  }
+
+  if (closeIpModalBtn) closeIpModalBtn.addEventListener('click', closeIPModal);
+  if (closeIpDossierBtn) closeIpDossierBtn.addEventListener('click', closeIPModal);
+
+  if (filterByIpBtn) {
+    filterByIpBtn.addEventListener('click', () => {
+      if (currentAnalyzedIP) filterDashboardByIP(currentAnalyzedIP);
+    });
+  }
+
+  if (ipModal) {
+    ipModal.addEventListener('click', (e) => {
+      if (e.target === ipModal) closeIPModal();
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && ipModal && !ipModal.classList.contains('hidden')) {
+      closeIPModal();
+    }
+  });
 
   setInterval(() => {
     if (state.isSimulating) return;
