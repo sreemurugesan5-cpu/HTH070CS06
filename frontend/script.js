@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * SOC-FUSION — Signal-Fused Intrusion Detection & Response Dashboard
- * Phase 9: Attack Timeline & Chronological Multi-Stage Progression
+ * Phase 10: Security Analytics & Dynamic Chart.js Telemetry
  * ==========================================================================
  */
 
@@ -43,6 +43,14 @@ const state = {
     max_analysts: 3
   },
   isOnline: true
+};
+
+// Active Chart Instances Storage (prevents memory leakage and canvas resize bugs)
+const charts = {
+  eventsTimeline: null,
+  severityBreakdown: null,
+  signalTypes: null,
+  topIps: null
 };
 
 const numberFormatter = new Intl.NumberFormat('en-US');
@@ -382,6 +390,9 @@ function renderIncidentsTable(incidents) {
   if (!state.selectedIncidentId && incidents.length > 0) {
     selectIncident(incidents[0], false);
   }
+
+  // Update dynamic charts whenever incident data updates
+  renderCharts();
 }
 
 function selectIncident(incident, triggerModalOpen = false) {
@@ -400,7 +411,6 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   console.log(`[SOC-FUSION] Incident selected: ${incident.id} (${incident.incident_type})`);
 
-  // Dynamically update the Signal Fusion Engine & Attack Timeline components
   renderSignalFusionVisualizer(incident);
   renderAttackTimeline(incident);
 
@@ -555,13 +565,8 @@ function renderSignalFusionVisualizer(incident) {
 
 /**
  * ==========================================================================
- * ATTACK TIMELINE & PROGRESSION (PHASE 9)
+ * ATTACK TIMELINE & PROGRESSION
  * ==========================================================================
- */
-
-/**
- * Render chronological attack timeline showing event sequence, host, and stage
- * @param {Object} incident Incident record
  */
 function renderAttackTimeline(incident) {
   const container = document.getElementById('attack-timeline-container');
@@ -574,7 +579,6 @@ function renderAttackTimeline(incident) {
 
   container.innerHTML = '';
 
-  // Determine timeline steps: use custom incident timeline or generate dynamic steps
   let timelineSteps = incident.timeline;
   if (!timelineSteps || timelineSteps.length === 0) {
     if (incident.id === 'INC-001') {
@@ -943,6 +947,252 @@ async function fetchIncidents() {
 
 /**
  * ==========================================================================
+ * SECURITY ANALYTICS CHARTS (PHASE 10)
+ * ==========================================================================
+ */
+
+/**
+ * Configure global Chart.js dark cybersecurity theme defaults
+ */
+function applyChartThemeDefaults() {
+  if (typeof Chart === 'undefined') return;
+
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.font.family = "'JetBrains Mono', 'Inter', monospace";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.responsive = true;
+  Chart.defaults.maintainAspectRatio = false;
+
+  // Tooltip defaults
+  Chart.defaults.plugins.tooltip.backgroundColor = '#0b1120';
+  Chart.defaults.plugins.tooltip.borderColor = 'rgba(56, 189, 248, 0.4)';
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 6;
+  Chart.defaults.plugins.tooltip.titleColor = '#ffffff';
+  Chart.defaults.plugins.tooltip.bodyColor = '#38bdf8';
+}
+
+/**
+ * Initialize or update the 4 Security Analytics Charts
+ */
+function renderCharts() {
+  if (typeof Chart === 'undefined') {
+    console.warn('[SOC-FUSION] Chart.js library not yet loaded. Retrying in 200ms...');
+    setTimeout(renderCharts, 200);
+    return;
+  }
+
+  applyChartThemeDefaults();
+
+  // 1. CHART: EVENTS OVER TIME (Line / Area)
+  const ctxTimeline = document.getElementById('chart-events-timeline');
+  if (ctxTimeline) {
+    const timelineLabels = ['10:20', '10:22', '10:24', '10:26', '10:28', '10:30', '10:32'];
+    const timelineData = [120, 185, 140, 290, 410, 680, 520];
+
+    if (charts.eventsTimeline) {
+      charts.eventsTimeline.data.datasets[0].data = timelineData;
+      charts.eventsTimeline.update();
+    } else {
+      charts.eventsTimeline = new Chart(ctxTimeline, {
+        type: 'line',
+        data: {
+          labels: timelineLabels,
+          datasets: [{
+            label: 'Events / Min',
+            data: timelineData,
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56, 189, 248, 0.12)',
+            borderWidth: 2,
+            tension: 0.35,
+            fill: true,
+            pointBackgroundColor: '#00d2ff',
+            pointBorderColor: '#0b1120',
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              grid: { color: 'rgba(56, 189, 248, 0.06)' },
+              ticks: { color: '#94a3b8' }
+            },
+            y: {
+              grid: { color: 'rgba(56, 189, 248, 0.06)' },
+              ticks: { color: '#94a3b8' },
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+  }
+
+  // 2. CHART: INCIDENTS BY SEVERITY (Doughnut)
+  const ctxSeverity = document.getElementById('chart-severity-breakdown');
+  if (ctxSeverity) {
+    // Dynamically calculate severity distribution from active incidents
+    let criticalCount = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+
+    (state.incidents || []).forEach(inc => {
+      const sev = (inc.severity || '').toUpperCase();
+      if (sev === 'CRITICAL') criticalCount++;
+      else if (sev === 'HIGH') highCount++;
+      else if (sev === 'MEDIUM') mediumCount++;
+      else lowCount++;
+    });
+
+    // Provide default baseline if incidents are 0
+    if (criticalCount + highCount + mediumCount + lowCount === 0) {
+      criticalCount = 2; highCount = 2; mediumCount = 1; lowCount = 0;
+    }
+
+    const severityData = [criticalCount, highCount, mediumCount, lowCount];
+
+    if (charts.severityBreakdown) {
+      charts.severityBreakdown.data.datasets[0].data = severityData;
+      charts.severityBreakdown.update();
+    } else {
+      charts.severityBreakdown = new Chart(ctxSeverity, {
+        type: 'doughnut',
+        data: {
+          labels: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+          datasets: [{
+            data: severityData,
+            backgroundColor: [
+              '#ef4444', // Red Critical
+              '#f97316', // Orange High
+              '#eab308', // Yellow Medium
+              '#10b981'  // Green Low
+            ],
+            borderColor: '#0b1120',
+            borderWidth: 2,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          cutout: '68%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                boxWidth: 12,
+                padding: 12,
+                color: '#94a3b8',
+                font: { size: 10 }
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  // 3. CHART: SIGNAL TYPES DISTRIBUTION (Horizontal Bar)
+  const ctxSignals = document.getElementById('chart-signal-types');
+  if (ctxSignals) {
+    const signalLabels = ['FAILED_LOGIN', 'PORT_SCAN', 'TRAFFIC_SPIKE', 'DNS_QUERY', 'DATA_TRANSFER'];
+    const signalCounts = [215, 124, 42, 35, 18];
+
+    if (charts.signalTypes) {
+      charts.signalTypes.data.datasets[0].data = signalCounts;
+      charts.signalTypes.update();
+    } else {
+      charts.signalTypes = new Chart(ctxSignals, {
+        type: 'bar',
+        data: {
+          labels: signalLabels,
+          datasets: [{
+            label: 'Signal Count',
+            data: signalCounts,
+            backgroundColor: 'rgba(0, 210, 255, 0.75)',
+            borderColor: '#00d2ff',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          scales: {
+            x: {
+              grid: { color: 'rgba(56, 189, 248, 0.06)' },
+              ticks: { color: '#94a3b8' },
+              beginAtZero: true
+            },
+            y: {
+              grid: { display: false },
+              ticks: { color: '#94a3b8', font: { size: 10 } }
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+  }
+
+  // 4. CHART: TOP SOURCE IPS (Vertical Bar)
+  const ctxTopIps = document.getElementById('chart-top-ips');
+  if (ctxTopIps) {
+    const ipLabels = ['192.168.1.50', '10.0.12.8', '172.16.4.19', '192.168.2.105', '10.200.5.44'];
+    const ipRiskScores = [92, 88, 76, 70, 48];
+
+    if (charts.topIps) {
+      charts.topIps.data.datasets[0].data = ipRiskScores;
+      charts.topIps.update();
+    } else {
+      charts.topIps = new Chart(ctxTopIps, {
+        type: 'bar',
+        data: {
+          labels: ipLabels,
+          datasets: [{
+            label: 'Risk Score',
+            data: ipRiskScores,
+            backgroundColor: [
+              'rgba(239, 68, 68, 0.8)',  // Critical Red
+              'rgba(239, 68, 68, 0.8)',  // Critical Red
+              'rgba(249, 115, 22, 0.8)', // High Orange
+              'rgba(249, 115, 22, 0.8)', // High Orange
+              'rgba(234, 179, 8, 0.8)'   // Medium Yellow
+            ],
+            borderColor: 'rgba(56, 189, 248, 0.3)',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: '#94a3b8', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: 'rgba(56, 189, 248, 0.06)' },
+              ticks: { color: '#94a3b8' },
+              beginAtZero: true,
+              max: 100
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+  }
+}
+
+/**
+ * ==========================================================================
  * INCIDENT DETAILS MODAL / INVESTIGATION DOSSIER
  * ==========================================================================
  */
@@ -1250,19 +1500,22 @@ window.socDashboard = {
     renderResponseQueue(state.queue, state.capacity);
     return state.capacity;
   },
+  renderCharts: renderCharts,
+  getCharts: () => charts,
   getQueue: () => state.queue,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 9: Attack Timeline & Progression...');
+  console.log('[SOC-FUSION] Initializing Phase 10: Security Analytics & Chart.js...');
   initClock();
   initModalListeners();
   fetchStats();
   fetchLogs();
   fetchIncidents();
   fetchQueue();
+  renderCharts();
 
   setInterval(() => {
     fetchStats();
@@ -1278,6 +1531,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchLogs();
       fetchIncidents();
       fetchQueue();
+      renderCharts();
     });
   }
 });
