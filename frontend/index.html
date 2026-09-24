@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOC-FUSION — Signal-Fused Intrusion Detection &amp; Response</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js CDN for Security Analytics in later phases -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+  <!-- ================================================== -->
+  <!-- TOP NAVIGATION                                     -->
+  <!-- ================================================== -->
+  <header class="soc-top-nav">
+    <div class="nav-brand">
+      <div class="brand-title">SOC-FUSION</div>
+      <div class="brand-subtitle">Signal-Fused Intrusion Detection &amp; Response</div>
+    </div>
+
+    <nav class="nav-links" aria-label="Main Navigation">
+      <a href="#dashboard" class="nav-link active">Dashboard</a>
+      <a href="#incidents" class="nav-link">Incidents</a>
+      <a href="#events" class="nav-link">Events</a>
+      <a href="#response-queue" class="nav-link">Response Queue</a>
+    </nav>
+
+    <div class="nav-system-status">
+      <div id="system-status-indicator" class="status-indicator online" aria-live="polite">
+        <span class="status-pulse" aria-hidden="true"></span>
+        <span id="system-status-text">SYSTEM ONLINE</span>
+      </div>
+      <div class="system-clock">
+        Last Updated: <span id="clock-display">--:--:--</span>
+      </div>
+      <button id="btn-start-simulation" class="btn-simulation" type="button" aria-label="Start Attack Simulation">
+        ▶ START ATTACK SIMULATION
+      </button>
+    </div>
+  </header>
+
+  <!-- ================================================== -->
+  <!-- BACKEND OFFLINE / SYSTEM NOTIFICATION BANNER       -->
+  <!-- ================================================== -->
+  <div id="offline-alert" class="alert-banner hidden" role="alert" aria-live="assertive">
+    <div class="alert-content">
+      <strong>SOC BACKEND OFFLINE</strong> — Unable to retrieve security events.
+      <button id="btn-retry-connection" type="button" class="btn-retry">Retry</button>
+    </div>
+  </div>
+
+  <!-- ================================================== -->
+  <!-- MAIN DASHBOARD CONTENT                             -->
+  <!-- ================================================== -->
+  <main class="soc-dashboard-container" id="dashboard">
+
+    <!-- -------------------------------------------------- -->
+    <!-- 1. SUMMARY METRICS CARDS                           -->
+    <!-- -------------------------------------------------- -->
+    <section class="summary-cards-grid" aria-label="SOC Metrics Summary">
+      <!-- Card 1: Total Events -->
+      <div class="summary-card" id="card-total-events">
+        <div class="card-icon" aria-hidden="true">📊</div>
+        <div class="card-meta">
+          <span class="card-label">TOTAL EVENTS</span>
+          <span class="card-value" id="stat-total-events">--</span>
+          <span class="card-trend text-neutral" id="trend-total-events">Awaiting ingest...</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Signals Detected -->
+      <div class="summary-card" id="card-signals-detected">
+        <div class="card-icon" aria-hidden="true">📡</div>
+        <div class="card-meta">
+          <span class="card-label">SIGNALS DETECTED</span>
+          <span class="card-value" id="stat-signals-detected">--</span>
+          <span class="card-trend text-cyan" id="trend-signals-detected">Pre-fusion telemetry</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Active Incidents -->
+      <div class="summary-card" id="card-active-incidents">
+        <div class="card-icon" aria-hidden="true">⚠️</div>
+        <div class="card-meta">
+          <span class="card-label">ACTIVE INCIDENTS</span>
+          <span class="card-value" id="stat-active-incidents">--</span>
+          <span class="card-trend text-orange" id="trend-active-incidents">Composite alerts</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Critical Incidents -->
+      <div class="summary-card" id="card-critical-incidents">
+        <div class="card-icon" aria-hidden="true">🚨</div>
+        <div class="card-meta">
+          <span class="card-label">CRITICAL INCIDENTS</span>
+          <span class="card-value" id="stat-critical-incidents">--</span>
+          <span class="card-trend text-red" id="trend-critical-incidents">Action required</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------- -->
+    <!-- 2. CORE WORKSPACE: EVENT STREAM & FUSION ENGINE    -->
+    <!-- -------------------------------------------------- -->
+    <div class="workspace-grid">
+
+      <!-- Panel: Live Security Event Stream -->
+      <section class="soc-panel panel-events" id="events" aria-labelledby="heading-event-stream">
+        <div class="panel-header">
+          <h2 id="heading-event-stream" class="panel-title">LIVE SECURITY EVENT STREAM</h2>
+          <span class="badge-count" id="event-stream-count">0 Events</span>
+        </div>
+        <div class="panel-body">
+          <div id="event-stream-container" class="event-stream-list" role="feed" aria-busy="false">
+            <div class="stream-empty-state">No real-time security events received yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: Signal Fusion Visualization & Attack Progression -->
+      <section class="soc-panel panel-fusion" aria-labelledby="heading-fusion-engine">
+        <div class="panel-header">
+          <h2 id="heading-fusion-engine" class="panel-title">SIGNAL FUSION ENGINE</h2>
+          <span class="panel-subtitle">Multi-Signal Correlation &amp; Context Aggregation</span>
+        </div>
+        <div class="panel-body">
+          <!-- Signal Fusion Engine Diagram Component -->
+          <div id="signal-fusion-visualizer" class="fusion-visualizer-container">
+            <div class="fusion-placeholder">
+              Select an active composite incident to view signal correlation paths.
+            </div>
+          </div>
+
+          <!-- Attack Timeline Component -->
+          <div class="timeline-subpanel">
+            <h3 class="subpanel-title">ATTACK TIMELINE &amp; PROGRESSION</h3>
+            <div id="attack-timeline-container" class="attack-timeline-container">
+              <div class="timeline-empty-state">Timeline awaiting incident selection.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel: SOC Response Queue & Capacity -->
+      <section class="soc-panel panel-queue" id="response-queue" aria-labelledby="heading-response-queue">
+        <div class="panel-header">
+          <h2 id="heading-response-queue" class="panel-title">SOC RESPONSE QUEUE</h2>
+          <span class="badge-tag">Capacity-Prioritized</span>
+        </div>
+        <div class="panel-body">
+          <!-- Analyst Capacity Visualization -->
+          <div class="capacity-widget" aria-label="Analyst Capacity">
+            <div class="capacity-header">
+              <span class="capacity-label">ANALYST CAPACITY</span>
+              <span class="capacity-metric" id="capacity-text">0 / 3 Active</span>
+            </div>
+            <div class="capacity-bar-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="3">
+              <div class="capacity-bar-fill" id="capacity-fill" style="width: 0%;"></div>
+            </div>
+            <div class="capacity-subtext" id="capacity-subtext">Calculating queue backlog...</div>
+          </div>
+
+          <!-- Response Queue List -->
+          <div id="response-queue-container" class="response-queue-list">
+            <div class="queue-empty-state">No incidents waiting in response queue.</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- -------------------------------------------------- -->
+    <!-- 3. ACTIVE COMPOSITE INCIDENTS TABLE                -->
+    <!-- -------------------------------------------------- -->
+    <section class="soc-panel panel-incidents" id="incidents" aria-labelledby="heading-incidents-table">
+      <div class="panel-header">
+        <h2 id="heading-incidents-table" class="panel-title">ACTIVE COMPOSITE INCIDENTS</h2>
+        <span class="panel-badge-info">High-Confidence Fused Alerts</span>
+      </div>
+      <div class="panel-body table-responsive">
+        <table class="soc-table" id="incidents-table" aria-label="Active Composite Incidents Table">
+          <thead>
+            <tr>
+              <th scope="col">ID</th>
+              <th scope="col">SOURCE IP</th>
+              <th scope="col">INCIDENT TYPE</th>
+              <th scope="col">SIGNALS</th>
+              <th scope="col">SEVERITY</th>
+              <th scope="col">RISK SCORE</th>
+              <th scope="col">CONFIDENCE</th>
+              <th scope="col">STATUS</th>
+              <th scope="col">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="incidents-table-body">
+            <tr class="table-empty-row">
+              <td colspan="9" class="text-center">No active composite incidents loaded.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------- -->
+    <!-- 4. SECURITY ANALYTICS CHARTS GRID                  -->
+    <!-- -------------------------------------------------- -->
+    <section class="soc-panel panel-analytics" aria-labelledby="heading-analytics">
+      <div class="panel-header">
+        <h2 id="heading-analytics" class="panel-title">SECURITY ANALYTICS</h2>
+        <span class="panel-subtitle">Distribution &amp; Trend Telemetry</span>
+      </div>
+      <div class="analytics-grid">
+        <div class="chart-container">
+          <h3 class="chart-title">Events Over Time</h3>
+          <canvas id="chart-events-timeline" aria-label="Events over time chart" role="img"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3 class="chart-title">Incidents by Severity</h3>
+          <canvas id="chart-severity-breakdown" aria-label="Incidents by severity chart" role="img"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3 class="chart-title">Signal Types Distribution</h3>
+          <canvas id="chart-signal-types" aria-label="Signal types chart" role="img"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3 class="chart-title">Top Source IPs</h3>
+          <canvas id="chart-top-ips" aria-label="Top source IPs chart" role="img"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================================================== -->
+  <!-- INCIDENT DETAILS MODAL / DRAWER                    -->
+  <!-- ================================================== -->
+  <div id="incident-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-incident-title" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2 id="modal-incident-title" class="modal-title">INCIDENT INVESTIGATION DOSSIER</h2>
+        <button id="btn-close-modal" type="button" class="btn-modal-close" aria-label="Close Incident Modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Key Metadata Overview -->
+        <div class="modal-section-grid">
+          <div class="meta-field">
+            <span class="meta-label">Incident ID:</span>
+            <span class="meta-value" id="modal-incident-id">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Source IP:</span>
+            <span class="meta-value" id="modal-source-ip">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Incident Type:</span>
+            <span class="meta-value" id="modal-incident-type">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Severity:</span>
+            <span class="meta-value" id="modal-severity">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Risk Score:</span>
+            <span class="meta-value" id="modal-risk-score">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Confidence:</span>
+            <span class="meta-value" id="modal-confidence">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">First Seen:</span>
+            <span class="meta-value" id="modal-first-seen">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Last Seen:</span>
+            <span class="meta-value" id="modal-last-seen">--</span>
+          </div>
+          <div class="meta-field">
+            <span class="meta-label">Status:</span>
+            <span class="meta-value" id="modal-status">--</span>
+          </div>
+        </div>
+
+        <!-- Section: Why Was This Incident Created? -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">WHY WAS THIS INCIDENT CREATED?</h3>
+          <ul id="modal-creation-reasons" class="creation-reasons-list">
+            <li>Awaiting incident selection.</li>
+          </ul>
+        </div>
+
+        <!-- Section: Attack Progression -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">ATTACK PROGRESSION</h3>
+          <div id="modal-attack-progression" class="progression-flow">
+            <span class="progression-step">Reconnaissance</span>
+            <span class="progression-arrow">&rarr;</span>
+            <span class="progression-step">Brute Force</span>
+            <span class="progression-arrow">&rarr;</span>
+            <span class="progression-step">Possible Exfiltration</span>
+          </div>
+        </div>
+
+        <!-- Section: Recommended Action -->
+        <div class="modal-section">
+          <h3 class="modal-section-heading">RECOMMENDED ACTION</h3>
+          <div id="modal-recommended-action" class="recommended-action-box">
+            Investigate source host immediately and review firewall/auth logs.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-assign-incident" type="button" class="btn btn-assign">ASSIGN</button>
+        <button id="btn-investigating-incident" type="button" class="btn btn-investigating">MARK INVESTIGATING</button>
+        <button id="btn-close-incident" type="button" class="btn btn-close-alert">CLOSE INCIDENT</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
