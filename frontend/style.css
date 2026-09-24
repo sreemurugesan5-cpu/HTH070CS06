@@ -935,6 +935,56 @@ body {
   background-color: var(--bg-panel-hover);
 }
 
+.soc-table tbody tr.selected-row {
+  background-color: rgba(14, 165, 233, 0.16) !important;
+  outline: 1px solid var(--cyber-blue);
+}
+
+.badge-signals {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--cyber-blue);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+
+.status-open {
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--text-red);
+  border: 1px solid var(--sev-critical-border);
+}
+
+.status-investigating {
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--cyber-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.status-assigned {
+  background: rgba(234, 179, 8, 0.14);
+  color: var(--text-yellow);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+
+.status-closed {
+  background: rgba(100, 116, 139, 0.14);
+  color: var(--text-muted);
+  border: 1px solid var(--sev-normal-border);
+}
+
 .table-id, .table-ip, .table-score, .table-conf {
   font-family: var(--font-mono);
 }
