@@ -6,14 +6,18 @@
  */
 
 // Central API Configuration
+const API_BASE = (window.location.protocol === 'file:' || (window.location.port !== '5000' && window.location.hostname === 'localhost'))
+  ? 'http://localhost:5000'
+  : '';
+
 const API_CONFIG = {
-  BASE_URL: '', // Supports relative Flask REST API routes
+  BASE_URL: API_BASE,
   ENDPOINTS: {
-    STATS: '/api/stats',
-    LOGS: '/api/logs',
-    INCIDENTS: '/api/incidents',
-    QUEUE: '/api/queue',
-    START_SIMULATION: '/api/start-simulation'
+    STATS: `${API_BASE}/api/stats`,
+    LOGS: `${API_BASE}/api/logs`,
+    INCIDENTS: `${API_BASE}/api/incidents`,
+    QUEUE: `${API_BASE}/api/queue`,
+    START_SIMULATION: `${API_BASE}/api/start-simulation`
   },
   POLL_INTERVAL_MS: 3000
 };
@@ -1309,7 +1313,7 @@ async function updateIncidentStatus(newStatus) {
   const incidentId = state.selectedIncident.id;
 
   try {
-    const endpoint = `/api/incidents/${encodeURIComponent(incidentId)}/${newStatus.toLowerCase()}`;
+    const endpoint = `${API_CONFIG.BASE_URL}/api/incidents/${encodeURIComponent(incidentId)}/${newStatus.toLowerCase()}`;
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
