@@ -884,11 +884,24 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  transition: background-color var(--transition-fast);
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .queue-item:hover {
   background: var(--bg-panel-hover);
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateX(2px);
+}
+
+.queue-item.queue-waiting {
+  border-left: 3px solid var(--sev-critical);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.queue-item.queue-waiting:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
 .queue-rank {

@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * SOC-FUSION — Signal-Fused Intrusion Detection & Response Dashboard
- * Phase 7: Signal Fusion Engine Visualization & Correlation Hierarchy
+ * Phase 8: SOC Response Queue & Capacity-Constrained Prioritization
  * ==========================================================================
  */
 
@@ -37,6 +37,11 @@ const state = {
   incidents: [],
   selectedIncidentId: null,
   selectedIncident: null,
+  queue: [],
+  capacity: {
+    active_analysts: 3,
+    max_analysts: 3
+  },
   isOnline: true
 };
 
@@ -395,7 +400,6 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   console.log(`[SOC-FUSION] Incident selected: ${incident.id} (${incident.incident_type})`);
 
-  // Dynamically update the Signal Fusion Engine diagram based on selected incident
   renderSignalFusionVisualizer(incident);
 
   document.dispatchEvent(new CustomEvent('soc:incident-selected', {
@@ -409,14 +413,8 @@ function selectIncident(incident, triggerModalOpen = false) {
 
 /**
  * ==========================================================================
- * SIGNAL FUSION ENGINE VISUALIZATION (PHASE 7)
+ * SIGNAL FUSION ENGINE VISUALIZATION
  * ==========================================================================
- */
-
-/**
- * Render the multi-signal correlation diagram showing how weak signals fuse
- * into a high-confidence composite incident
- * @param {Object} incident Incident record
  */
 function renderSignalFusionVisualizer(incident) {
   const container = document.getElementById('signal-fusion-visualizer');
@@ -429,7 +427,6 @@ function renderSignalFusionVisualizer(incident) {
 
   container.innerHTML = '';
 
-  // 1. Top Metadata / Target Bar
   const metaHeader = document.createElement('div');
   metaHeader.className = 'fusion-meta-header';
   
@@ -458,7 +455,6 @@ function renderSignalFusionVisualizer(incident) {
   metaHeader.appendChild(spanScore);
   container.appendChild(metaHeader);
 
-  // 2. Central Flow Box
   const flowBox = document.createElement('div');
   flowBox.className = 'fusion-flow-box';
 
@@ -481,7 +477,6 @@ function renderSignalFusionVisualizer(incident) {
     RATE_LIMIT_EXCEEDED: '⏱️'
   };
 
-  // Render individual weak signal nodes
   signals.forEach((sig, index) => {
     const node = document.createElement('div');
     node.className = 'fusion-node';
@@ -511,26 +506,22 @@ function renderSignalFusionVisualizer(incident) {
     node.appendChild(ip);
     flowBox.appendChild(node);
 
-    // Connecting arrow between stages
     const arrow = document.createElement('div');
     arrow.className = 'fusion-arrow';
     arrow.innerHTML = '&darr;';
     flowBox.appendChild(arrow);
   });
 
-  // Signal Fusion Core Processing Bar
   const coreBox = document.createElement('div');
   coreBox.className = 'fusion-core-indicator';
   coreBox.innerHTML = `<span>⚡ SIGNAL FUSION ENGINE</span><span>•</span><span>TEMPORAL WINDOW: 60s</span>`;
   flowBox.appendChild(coreBox);
 
-  // Arrow connecting Fusion Core to Composite Incident
   const coreArrow = document.createElement('div');
   coreArrow.className = 'fusion-arrow';
   coreArrow.innerHTML = '&darr;';
   flowBox.appendChild(coreArrow);
 
-  // Final Composite Incident Box
   const sevKey = (incident.severity || 'LOW').toLowerCase();
   const compositeBox = document.createElement('div');
   compositeBox.className = `fusion-composite-box fusion-sev-${sevKey}`;
@@ -558,6 +549,177 @@ function renderSignalFusionVisualizer(incident) {
 
   flowBox.appendChild(compositeBox);
   container.appendChild(flowBox);
+}
+
+/**
+ * ==========================================================================
+ * SOC RESPONSE QUEUE & CAPACITY COMPONENT (PHASE 8)
+ * ==========================================================================
+ */
+
+/**
+ * Build a single response queue card
+ * @param {Object} item Queue item
+ * @returns {HTMLElement}
+ */
+function createQueueItemElement(item) {
+  const card = document.createElement('div');
+  const isWaiting = (item.status || '').toUpperCase() === 'WAITING';
+  card.className = `queue-item${isWaiting ? ' queue-waiting' : ''}`;
+  card.dataset.id = item.incident_id;
+
+  // Rank badge
+  const rankEl = document.createElement('div');
+  rankEl.className = 'queue-rank';
+  rankEl.textContent = `#${item.rank}`;
+
+  // Content Details
+  const detailsEl = document.createElement('div');
+  detailsEl.className = 'queue-details';
+
+  // Title row: ID, Severity Badge, Risk Score
+  const titleRow = document.createElement('div');
+  titleRow.className = 'queue-title-row';
+
+  const idSpan = document.createElement('span');
+  idSpan.className = 'queue-id';
+  idSpan.textContent = item.incident_id;
+
+  const rightMeta = document.createElement('div');
+  rightMeta.style.display = 'flex';
+  rightMeta.style.alignItems = 'center';
+  rightMeta.style.gap = '0.5rem';
+
+  const sevKey = (item.severity || 'LOW').toLowerCase();
+  const sevBadge = document.createElement('span');
+  sevBadge.className = `badge-sev badge-sev-${sevKey}`;
+  sevBadge.textContent = (item.severity || 'LOW').toUpperCase();
+
+  const riskSpan = document.createElement('span');
+  riskSpan.className = 'table-score';
+  riskSpan.textContent = `Risk ${item.risk_score ?? '--'}`;
+  if ((item.risk_score ?? 0) >= 80) riskSpan.classList.add('text-red');
+  else if ((item.risk_score ?? 0) >= 60) riskSpan.classList.add('text-orange');
+  else riskSpan.classList.add('text-yellow');
+
+  rightMeta.appendChild(sevBadge);
+  rightMeta.appendChild(riskSpan);
+
+  titleRow.appendChild(idSpan);
+  titleRow.appendChild(rightMeta);
+
+  // Meta row: Assigned Analyst & Status Chip
+  const metaRow = document.createElement('div');
+  metaRow.className = 'queue-meta-row';
+
+  const analystSpan = document.createElement('span');
+  analystSpan.className = 'queue-analyst';
+  analystSpan.textContent = item.analyst ? `👤 ${item.analyst}` : '— Unassigned';
+  if (!item.analyst) analystSpan.style.color = 'var(--text-muted)';
+
+  const statusChip = document.createElement('span');
+  const statusKey = (item.status || 'WAITING').toLowerCase();
+  statusChip.className = `queue-status-chip chip-${statusKey}`;
+  statusChip.textContent = (item.status || 'WAITING').toUpperCase();
+
+  metaRow.appendChild(analystSpan);
+  metaRow.appendChild(statusChip);
+
+  detailsEl.appendChild(titleRow);
+  detailsEl.appendChild(metaRow);
+
+  card.appendChild(rankEl);
+  card.appendChild(detailsEl);
+
+  // Interactivity: clicking a queue item selects the corresponding incident
+  card.addEventListener('click', () => {
+    const matchingIncident = state.incidents.find(inc => inc.id === item.incident_id);
+    if (matchingIncident) {
+      selectIncident(matchingIncident, false);
+    }
+  });
+
+  return card;
+}
+
+/**
+ * Render the SOC Response Queue and Analyst Capacity Bar
+ * @param {Array} queueList
+ * @param {Object} capacityInfo
+ */
+function renderResponseQueue(queueList, capacityInfo) {
+  const container = document.getElementById('response-queue-container');
+  const capText = document.getElementById('capacity-text');
+  const capFill = document.getElementById('capacity-fill');
+  const capSubtext = document.getElementById('capacity-subtext');
+
+  // 1. Update Analyst Capacity Visualization
+  const active = capacityInfo?.active_analysts ?? 3;
+  const max = capacityInfo?.max_analysts ?? 3;
+  const ratio = max > 0 ? (active / max) : 1;
+  const percent = Math.min(100, Math.round(ratio * 100));
+
+  if (capText) capText.textContent = `${active} / ${max} Active`;
+  if (capFill) {
+    capFill.style.width = `${percent}%`;
+    if (percent >= 100) {
+      capFill.style.background = 'linear-gradient(90deg, #f97316 0%, #ef4444 100%)';
+    } else {
+      capFill.style.background = 'linear-gradient(90deg, #10b981 0%, #eab308 70%, #ef4444 100%)';
+    }
+  }
+
+  // Count waiting items
+  const waitingCount = (queueList || []).filter(item => (item.status || '').toUpperCase() === 'WAITING').length;
+  if (capSubtext) {
+    if (waitingCount > 0) {
+      capSubtext.textContent = `⚠️ ${waitingCount} incident${waitingCount === 1 ? '' : 's'} WAITING (Capacity Saturation)`;
+      capSubtext.style.color = 'var(--text-orange)';
+    } else {
+      capSubtext.textContent = 'Analyst bandwidth available';
+      capSubtext.style.color = 'var(--text-green)';
+    }
+  }
+
+  // 2. Render Queue Cards
+  if (!container) return;
+
+  if (!queueList || queueList.length === 0) {
+    container.innerHTML = '<div class="queue-empty-state">No incidents waiting in response queue.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  queueList.forEach(item => {
+    const card = createQueueItemElement(item);
+    container.appendChild(card);
+  });
+}
+
+async function fetchQueue() {
+  try {
+    const response = await fetch(API_CONFIG.ENDPOINTS.QUEUE);
+    if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch /api/queue`);
+    const data = await response.json();
+    state.queue = data.queue || (Array.isArray(data) ? data : []);
+    state.capacity = data.capacity || state.capacity;
+    renderResponseQueue(state.queue, state.capacity);
+    hideOfflineAlert();
+  } catch (error) {
+    if (state.queue.length === 0) {
+      const demoQueue = [
+        { rank: 1, incident_id: 'INC-001', severity: 'CRITICAL', risk_score: 92, analyst: 'Analyst A', status: 'INVESTIGATING' },
+        { rank: 2, incident_id: 'INC-004', severity: 'CRITICAL', risk_score: 88, analyst: 'Analyst B', status: 'ASSIGNED' },
+        { rank: 3, incident_id: 'INC-007', severity: 'HIGH', risk_score: 76, analyst: 'Analyst C', status: 'ASSIGNED' },
+        { rank: 4, incident_id: 'INC-009', severity: 'HIGH', risk_score: 70, analyst: null, status: 'WAITING' },
+        { rank: 5, incident_id: 'INC-011', severity: 'MEDIUM', risk_score: 48, analyst: null, status: 'WAITING' }
+      ];
+      const demoCapacity = { active_analysts: 3, max_analysts: 3 };
+      state.queue = demoQueue;
+      state.capacity = demoCapacity;
+      renderResponseQueue(demoQueue, demoCapacity);
+    }
+  }
 }
 
 async function fetchIncidents() {
@@ -812,6 +974,13 @@ async function updateIncidentStatus(newStatus) {
     state.incidents[idx].status = newStatus;
   }
 
+  // Update in response queue as well
+  const qIdx = state.queue.findIndex(item => item.incident_id === incidentId);
+  if (qIdx !== -1) {
+    state.queue[qIdx].status = newStatus;
+    renderResponseQueue(state.queue, state.capacity);
+  }
+
   if (newStatus === 'CLOSED') {
     state.stats.active_incidents = Math.max(0, (state.stats.active_incidents || 1) - 1);
     if ((state.selectedIncident.severity || '').toUpperCase() === 'CRITICAL') {
@@ -971,22 +1140,31 @@ window.socDashboard = {
   renderFusion: (incident) => {
     renderSignalFusionVisualizer(incident || state.selectedIncident);
   },
+  updateCapacity: (active, max) => {
+    state.capacity.active_analysts = active;
+    state.capacity.max_analysts = max;
+    renderResponseQueue(state.queue, state.capacity);
+    return state.capacity;
+  },
+  getQueue: () => state.queue,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 7: Signal Fusion Engine Visualizer...');
+  console.log('[SOC-FUSION] Initializing Phase 8: SOC Response Queue & Capacity Prioritization...');
   initClock();
   initModalListeners();
   fetchStats();
   fetchLogs();
   fetchIncidents();
+  fetchQueue();
 
   setInterval(() => {
     fetchStats();
     fetchLogs();
     fetchIncidents();
+    fetchQueue();
   }, API_CONFIG.POLL_INTERVAL_MS);
 
   const retryBtn = document.getElementById('btn-retry-connection');
@@ -995,6 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fetchStats();
       fetchLogs();
       fetchIncidents();
+      fetchQueue();
     });
   }
 });
