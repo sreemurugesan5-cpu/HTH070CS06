@@ -263,6 +263,10 @@ body {
   cursor: pointer;
   box-shadow: 0 0 12px rgba(2, 132, 199, 0.35);
   transition: all var(--transition-fast);
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+  user-select: none;
 }
 
 .btn-simulation:hover {
