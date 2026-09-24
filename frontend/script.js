@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * SOC-FUSION — Signal-Fused Intrusion Detection & Response Dashboard
- * Phase 6: Incident Details Modal / Investigation Dossier
+ * Phase 7: Signal Fusion Engine Visualization & Correlation Hierarchy
  * ==========================================================================
  */
 
@@ -344,11 +344,11 @@ function createIncidentRowElement(incident) {
   tr.appendChild(tdStatus);
   tr.appendChild(tdAction);
 
-  tr.addEventListener('click', () => selectIncident(incident, true));
+  tr.addEventListener('click', () => selectIncident(incident, false));
   tr.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      selectIncident(incident, true);
+      selectIncident(incident, false);
     }
   });
 
@@ -395,6 +395,9 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   console.log(`[SOC-FUSION] Incident selected: ${incident.id} (${incident.incident_type})`);
 
+  // Dynamically update the Signal Fusion Engine diagram based on selected incident
+  renderSignalFusionVisualizer(incident);
+
   document.dispatchEvent(new CustomEvent('soc:incident-selected', {
     detail: { incident, triggerModalOpen }
   }));
@@ -402,6 +405,159 @@ function selectIncident(incident, triggerModalOpen = false) {
   if (triggerModalOpen) {
     openIncidentModal(incident);
   }
+}
+
+/**
+ * ==========================================================================
+ * SIGNAL FUSION ENGINE VISUALIZATION (PHASE 7)
+ * ==========================================================================
+ */
+
+/**
+ * Render the multi-signal correlation diagram showing how weak signals fuse
+ * into a high-confidence composite incident
+ * @param {Object} incident Incident record
+ */
+function renderSignalFusionVisualizer(incident) {
+  const container = document.getElementById('signal-fusion-visualizer');
+  if (!container) return;
+
+  if (!incident) {
+    container.innerHTML = '<div class="fusion-placeholder">Select an active composite incident to view signal correlation paths.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // 1. Top Metadata / Target Bar
+  const metaHeader = document.createElement('div');
+  metaHeader.className = 'fusion-meta-header';
+  
+  const spanTarget = document.createElement('span');
+  spanTarget.textContent = `TARGET: ${incident.source_ip || 'UNKNOWN'}`;
+  
+  const spanSep1 = document.createElement('span');
+  spanSep1.textContent = '•';
+
+  const spanId = document.createElement('span');
+  spanId.textContent = `INCIDENT: ${incident.id}`;
+
+  const spanSep2 = document.createElement('span');
+  spanSep2.textContent = '•';
+
+  const spanScore = document.createElement('span');
+  spanScore.textContent = `RISK: ${incident.risk_score} (${incident.confidence}% CONF)`;
+  if ((incident.risk_score ?? 0) >= 80) spanScore.classList.add('text-red');
+  else if ((incident.risk_score ?? 0) >= 60) spanScore.classList.add('text-orange');
+  else spanScore.classList.add('text-yellow');
+
+  metaHeader.appendChild(spanTarget);
+  metaHeader.appendChild(spanSep1);
+  metaHeader.appendChild(spanId);
+  metaHeader.appendChild(spanSep2);
+  metaHeader.appendChild(spanScore);
+  container.appendChild(metaHeader);
+
+  // 2. Central Flow Box
+  const flowBox = document.createElement('div');
+  flowBox.className = 'fusion-flow-box';
+
+  const signals = Array.isArray(incident.signals) && incident.signals.length > 0 
+    ? incident.signals 
+    : ['PORT_SCAN', 'FAILED_LOGIN', 'TRAFFIC_SPIKE'];
+
+  const signalIcons = {
+    PORT_SCAN: '📡',
+    SYN_SCAN: '📡',
+    ICMP_SWEEP: '🔍',
+    FAILED_LOGIN: '🔐',
+    AUTH_BURST: '🔑',
+    INVALID_USER_SURGE: '👤',
+    DISTRIBUTED_PROXY: '🌐',
+    TRAFFIC_SPIKE: '⚡',
+    LARGE_OUTBOUND_CONN: '📤',
+    UNUSUAL_PORT_EGRESS: '🚪',
+    DNS_TUNNEL_BURST: '📡',
+    RATE_LIMIT_EXCEEDED: '⏱️'
+  };
+
+  // Render individual weak signal nodes
+  signals.forEach((sig, index) => {
+    const node = document.createElement('div');
+    node.className = 'fusion-node';
+
+    const left = document.createElement('div');
+    left.style.display = 'flex';
+    left.style.alignItems = 'center';
+    left.style.gap = '0.5rem';
+
+    const icon = signalIcons[sig] || '⚠️';
+    const title = document.createElement('span');
+    title.className = 'fusion-node-title';
+    title.textContent = `${icon} ${sig.replace(/_/g, ' ')}`;
+
+    const tag = document.createElement('span');
+    tag.className = 'fusion-signal-tag';
+    tag.textContent = `Signal #${index + 1}`;
+
+    left.appendChild(title);
+    left.appendChild(tag);
+
+    const ip = document.createElement('span');
+    ip.className = 'fusion-node-ip';
+    ip.textContent = incident.source_ip || '192.168.1.50';
+
+    node.appendChild(left);
+    node.appendChild(ip);
+    flowBox.appendChild(node);
+
+    // Connecting arrow between stages
+    const arrow = document.createElement('div');
+    arrow.className = 'fusion-arrow';
+    arrow.innerHTML = '&darr;';
+    flowBox.appendChild(arrow);
+  });
+
+  // Signal Fusion Core Processing Bar
+  const coreBox = document.createElement('div');
+  coreBox.className = 'fusion-core-indicator';
+  coreBox.innerHTML = `<span>⚡ SIGNAL FUSION ENGINE</span><span>•</span><span>TEMPORAL WINDOW: 60s</span>`;
+  flowBox.appendChild(coreBox);
+
+  // Arrow connecting Fusion Core to Composite Incident
+  const coreArrow = document.createElement('div');
+  coreArrow.className = 'fusion-arrow';
+  coreArrow.innerHTML = '&darr;';
+  flowBox.appendChild(coreArrow);
+
+  // Final Composite Incident Box
+  const sevKey = (incident.severity || 'LOW').toLowerCase();
+  const compositeBox = document.createElement('div');
+  compositeBox.className = `fusion-composite-box fusion-sev-${sevKey}`;
+
+  const compMeta = document.createElement('div');
+  compMeta.className = 'fusion-composite-meta';
+
+  const compTitle = document.createElement('div');
+  compTitle.className = 'fusion-composite-title';
+  compTitle.textContent = `COMPOSITE INCIDENT: ${incident.incident_type || 'MULTI-STAGE ATTACK'}`;
+
+  const compSub = document.createElement('div');
+  compSub.className = 'fusion-composite-sub';
+  compSub.textContent = `High-Confidence Correlation (${incident.confidence}% Conf • Risk Score: ${incident.risk_score})`;
+
+  compMeta.appendChild(compTitle);
+  compMeta.appendChild(compSub);
+
+  const compBadge = document.createElement('span');
+  compBadge.className = 'fusion-composite-badge';
+  compBadge.textContent = (incident.severity || 'LOW').toUpperCase();
+
+  compositeBox.appendChild(compMeta);
+  compositeBox.appendChild(compBadge);
+
+  flowBox.appendChild(compositeBox);
+  container.appendChild(flowBox);
 }
 
 async function fetchIncidents() {
@@ -523,13 +679,8 @@ async function fetchIncidents() {
 
 /**
  * ==========================================================================
- * INCIDENT DETAILS MODAL / INVESTIGATION DOSSIER (PHASE 6)
+ * INCIDENT DETAILS MODAL / INVESTIGATION DOSSIER
  * ==========================================================================
- */
-
-/**
- * Open and populate the Incident Investigation Dossier Modal
- * @param {Object} incident Incident data record
  */
 function openIncidentModal(incident) {
   if (!incident) return;
@@ -537,11 +688,9 @@ function openIncidentModal(incident) {
   const modalEl = document.getElementById('incident-modal');
   if (!modalEl) return;
 
-  // Title
   const titleEl = document.getElementById('modal-incident-title');
   if (titleEl) titleEl.textContent = `INCIDENT INVESTIGATION DOSSIER — ${incident.id}`;
 
-  // Key Metadata
   const idEl = document.getElementById('modal-incident-id');
   const ipEl = document.getElementById('modal-source-ip');
   const typeEl = document.getElementById('modal-incident-type');
@@ -556,7 +705,6 @@ function openIncidentModal(incident) {
   if (ipEl) ipEl.textContent = incident.source_ip || '--';
   if (typeEl) typeEl.textContent = incident.incident_type || '--';
 
-  // Severity badge in modal
   if (sevEl) {
     sevEl.innerHTML = '';
     const sevKey = (incident.severity || 'LOW').toUpperCase();
@@ -566,7 +714,6 @@ function openIncidentModal(incident) {
     sevEl.appendChild(spanSev);
   }
 
-  // Risk Score with color
   if (riskEl) {
     riskEl.textContent = incident.risk_score ?? '--';
     riskEl.className = 'meta-value';
@@ -576,7 +723,6 @@ function openIncidentModal(incident) {
     else riskEl.classList.add('text-green');
   }
 
-  // Confidence
   if (confEl) {
     confEl.textContent = typeof incident.confidence === 'number' ? `${incident.confidence}%` : (incident.confidence || '--');
   }
@@ -584,7 +730,6 @@ function openIncidentModal(incident) {
   if (firstSeenEl) firstSeenEl.textContent = incident.first_seen || '10:31:12';
   if (lastSeenEl) lastSeenEl.textContent = incident.last_seen || '10:31:21';
 
-  // Status badge in modal
   if (statusEl) {
     statusEl.innerHTML = '';
     const statusKey = (incident.status || 'OPEN').toUpperCase();
@@ -594,7 +739,6 @@ function openIncidentModal(incident) {
     statusEl.appendChild(spanStatus);
   }
 
-  // Section: WHY WAS THIS INCIDENT CREATED?
   const reasonsListEl = document.getElementById('modal-creation-reasons');
   if (reasonsListEl) {
     reasonsListEl.innerHTML = '';
@@ -610,7 +754,6 @@ function openIncidentModal(incident) {
     });
   }
 
-  // Section: ATTACK PROGRESSION
   const progressionEl = document.getElementById('modal-attack-progression');
   if (progressionEl) {
     progressionEl.innerHTML = '';
@@ -630,20 +773,15 @@ function openIncidentModal(incident) {
     });
   }
 
-  // Section: RECOMMENDED ACTION
   const actionEl = document.getElementById('modal-recommended-action');
   if (actionEl) {
     actionEl.textContent = incident.recommended_action || 'Investigate source host immediately. Isolate host if traffic exceeds threshold.';
   }
 
-  // Show Modal Dialog
   modalEl.classList.remove('hidden');
   modalEl.setAttribute('aria-hidden', 'false');
 }
 
-/**
- * Close the Incident Investigation Dossier Modal
- */
 function closeIncidentModal() {
   const modalEl = document.getElementById('incident-modal');
   if (modalEl) {
@@ -652,10 +790,6 @@ function closeIncidentModal() {
   }
 }
 
-/**
- * Handle incident status update API requests
- * @param {string} newStatus 
- */
 async function updateIncidentStatus(newStatus) {
   if (!state.selectedIncident) return;
   const incidentId = state.selectedIncident.id;
@@ -669,18 +803,15 @@ async function updateIncidentStatus(newStatus) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
   } catch (err) {
-    // When API is running in local preview mode, update local state directly
     console.warn(`[SOC-FUSION] Live backend endpoint unavailable for ${newStatus}. Updating state locally for preview.`);
   }
 
-  // Update local incident record
   state.selectedIncident.status = newStatus;
   const idx = state.incidents.findIndex(inc => inc.id === incidentId);
   if (idx !== -1) {
     state.incidents[idx].status = newStatus;
   }
 
-  // If incident was closed, update active incidents count
   if (newStatus === 'CLOSED') {
     state.stats.active_incidents = Math.max(0, (state.stats.active_incidents || 1) - 1);
     if ((state.selectedIncident.severity || '').toUpperCase() === 'CRITICAL') {
@@ -689,7 +820,6 @@ async function updateIncidentStatus(newStatus) {
     renderSummaryCards(state.stats);
   }
 
-  // Refresh table and modal status badge
   renderIncidentsTable(state.incidents);
   
   const statusEl = document.getElementById('modal-status');
@@ -704,51 +834,34 @@ async function updateIncidentStatus(newStatus) {
   console.log(`[SOC-FUSION] Incident ${incidentId} marked as ${newStatus}`);
 }
 
-/**
- * Attach modal event listeners
- */
 function initModalListeners() {
   const modalEl = document.getElementById('incident-modal');
   const closeBtn = document.getElementById('btn-close-modal');
 
-  // Close via button
-  if (closeBtn) {
-    closeBtn.addEventListener('click', closeIncidentModal);
-  }
+  if (closeBtn) closeBtn.addEventListener('click', closeIncidentModal);
 
-  // Close via backdrop click
   if (modalEl) {
     modalEl.addEventListener('click', (e) => {
-      if (e.target === modalEl) {
-        closeIncidentModal();
-      }
+      if (e.target === modalEl) closeIncidentModal();
     });
   }
 
-  // Close via Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modalEl && !modalEl.classList.contains('hidden')) {
       closeIncidentModal();
     }
   });
 
-  // Action Button 1: ASSIGN
   const assignBtn = document.getElementById('btn-assign-incident');
   if (assignBtn) {
-    assignBtn.addEventListener('click', () => {
-      updateIncidentStatus('ASSIGNED');
-    });
+    assignBtn.addEventListener('click', () => updateIncidentStatus('ASSIGNED'));
   }
 
-  // Action Button 2: MARK INVESTIGATING
   const investBtn = document.getElementById('btn-investigating-incident');
   if (investBtn) {
-    investBtn.addEventListener('click', () => {
-      updateIncidentStatus('INVESTIGATING');
-    });
+    investBtn.addEventListener('click', () => updateIncidentStatus('INVESTIGATING'));
   }
 
-  // Action Button 3: CLOSE INCIDENT
   const closeIncBtn = document.getElementById('btn-close-incident');
   if (closeIncBtn) {
     closeIncBtn.addEventListener('click', () => {
@@ -846,7 +959,7 @@ window.socDashboard = {
   },
   selectIncident: (id) => {
     const target = state.incidents.find(inc => inc.id === id);
-    if (target) selectIncident(target, true);
+    if (target) selectIncident(target, false);
     return target;
   },
   openModal: (id) => {
@@ -855,12 +968,15 @@ window.socDashboard = {
     return target;
   },
   closeModal: closeIncidentModal,
+  renderFusion: (incident) => {
+    renderSignalFusionVisualizer(incident || state.selectedIncident);
+  },
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 6: Incident Details Modal & Dossier...');
+  console.log('[SOC-FUSION] Initializing Phase 7: Signal Fusion Engine Visualizer...');
   initClock();
   initModalListeners();
   fetchStats();
