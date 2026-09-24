@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * SOC-FUSION — Signal-Fused Intrusion Detection & Response Dashboard
- * Phase 5: Active Composite Incidents Table & Incident Selection
+ * Phase 6: Incident Details Modal / Investigation Dossier
  * ==========================================================================
  */
 
@@ -40,22 +40,13 @@ const state = {
   isOnline: true
 };
 
-// Standard US Locale Number Formatter (e.g. 12,540)
 const numberFormatter = new Intl.NumberFormat('en-US');
 
-/**
- * Safely format numbers with comma separators
- * @param {number|string} value
- * @returns {string}
- */
 function formatNumber(value) {
   const num = Number(value);
   return isNaN(num) ? '0' : numberFormatter.format(num);
 }
 
-/**
- * Animate numeric value transitions smoothly for cyber telemetry feel
- */
 function animateValue(element, start, end, duration = 650) {
   if (!element) return;
   if (start === end) {
@@ -80,9 +71,6 @@ function animateValue(element, start, end, duration = 650) {
   requestAnimationFrame(step);
 }
 
-/**
- * Render the 4 Major SOC Summary Cards from data
- */
 function renderSummaryCards(statsData) {
   if (!statsData) return;
 
@@ -123,11 +111,6 @@ function renderSummaryCards(statsData) {
   }
 }
 
-/**
- * ==========================================================================
- * LIVE SECURITY EVENT STREAM COMPONENT
- * ==========================================================================
- */
 function getSeverityForEvent(eventType = '') {
   const type = eventType.toUpperCase();
   if (type.includes('EXFIL') || type.includes('ROOT') || type.includes('MALWARE')) return 'critical';
@@ -250,51 +233,11 @@ async function fetchLogs() {
   } catch (error) {
     if (state.logs.length === 0) {
       const demoLogs = [
-        {
-          id: 103,
-          timestamp: '10:31:16',
-          source_ip: '192.168.1.50',
-          event_type: 'TRAFFIC_SPIKE',
-          source: 'Network Monitor',
-          status: 'DETECTED',
-          severity: 'HIGH'
-        },
-        {
-          id: 102,
-          timestamp: '10:31:14',
-          source_ip: '192.168.1.50',
-          event_type: 'FAILED_LOGIN',
-          source: 'Authentication',
-          status: 'DETECTED',
-          severity: 'HIGH'
-        },
-        {
-          id: 101,
-          timestamp: '10:31:12',
-          source_ip: '192.168.1.50',
-          event_type: 'PORT_SCAN',
-          source: 'Firewall',
-          status: 'DETECTED',
-          severity: 'MEDIUM'
-        },
-        {
-          id: 100,
-          timestamp: '10:30:52',
-          source_ip: '10.0.8.22',
-          event_type: 'DNS_TUNNEL_BURST',
-          source: 'DPI Sensor',
-          status: 'DETECTED',
-          severity: 'MEDIUM'
-        },
-        {
-          id: 99,
-          timestamp: '10:30:35',
-          source_ip: '172.16.0.4',
-          event_type: 'CERT_EXPIRY_WARN',
-          source: 'TLS Gateway',
-          status: 'LOGGED',
-          severity: 'LOW'
-        }
+        { id: 103, timestamp: '10:31:16', source_ip: '192.168.1.50', event_type: 'TRAFFIC_SPIKE', source: 'Network Monitor', status: 'DETECTED', severity: 'HIGH' },
+        { id: 102, timestamp: '10:31:14', source_ip: '192.168.1.50', event_type: 'FAILED_LOGIN', source: 'Authentication', status: 'DETECTED', severity: 'HIGH' },
+        { id: 101, timestamp: '10:31:12', source_ip: '192.168.1.50', event_type: 'PORT_SCAN', source: 'Firewall', status: 'DETECTED', severity: 'MEDIUM' },
+        { id: 100, timestamp: '10:30:52', source_ip: '10.0.8.22', event_type: 'DNS_TUNNEL_BURST', source: 'DPI Sensor', status: 'DETECTED', severity: 'MEDIUM' },
+        { id: 99, timestamp: '10:30:35', source_ip: '172.16.0.4', event_type: 'CERT_EXPIRY_WARN', source: 'TLS Gateway', status: 'LOGGED', severity: 'LOW' }
       ];
       state.logs = demoLogs;
       renderEventStream(demoLogs, false);
@@ -304,19 +247,13 @@ async function fetchLogs() {
 
 /**
  * ==========================================================================
- * ACTIVE COMPOSITE INCIDENTS TABLE COMPONENT (PHASE 5)
+ * ACTIVE COMPOSITE INCIDENTS TABLE COMPONENT
  * ==========================================================================
- */
-
-/**
- * Build a table row for an active composite incident
- * @param {Object} incident Incident data record
- * @returns {HTMLTableRowElement}
  */
 function createIncidentRowElement(incident) {
   const tr = document.createElement('tr');
   tr.dataset.id = incident.id;
-  tr.tabIndex = 0; // Accessible keyboard focus
+  tr.tabIndex = 0;
 
   if (state.selectedIncidentId === incident.id) {
     tr.classList.add('selected-row');
@@ -349,7 +286,7 @@ function createIncidentRowElement(incident) {
   spanSignals.textContent = `${sigCount} signal${sigCount === 1 ? '' : 's'}`;
   tdSignals.appendChild(spanSignals);
 
-  // Column 5: SEVERITY (Red Critical, Orange High, Yellow Medium, Green Low)
+  // Column 5: SEVERITY
   const tdSev = document.createElement('td');
   const sevKey = (incident.severity || 'LOW').toUpperCase();
   const spanSev = document.createElement('span');
@@ -397,7 +334,6 @@ function createIncidentRowElement(incident) {
   });
   tdAction.appendChild(btnAction);
 
-  // Assemble cells
   tr.appendChild(tdId);
   tr.appendChild(tdIp);
   tr.appendChild(tdType);
@@ -408,22 +344,17 @@ function createIncidentRowElement(incident) {
   tr.appendChild(tdStatus);
   tr.appendChild(tdAction);
 
-  // Row selection listeners
-  tr.addEventListener('click', () => selectIncident(incident, false));
+  tr.addEventListener('click', () => selectIncident(incident, true));
   tr.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      selectIncident(incident, false);
+      selectIncident(incident, true);
     }
   });
 
   return tr;
 }
 
-/**
- * Render the Active Composite Incidents Table
- * @param {Array} incidents Array of composite incident objects
- */
 function renderIncidentsTable(incidents) {
   const tbody = document.getElementById('incidents-table-body');
   if (!tbody) return;
@@ -443,23 +374,16 @@ function renderIncidentsTable(incidents) {
     tbody.appendChild(tr);
   });
 
-  // Default select first incident if none selected
   if (!state.selectedIncidentId && incidents.length > 0) {
     selectIncident(incidents[0], false);
   }
 }
 
-/**
- * Select an incident to populate the dossier and highlight the row
- * @param {Object} incident Incident object
- * @param {boolean} triggerModalOpen Whether this action explicitly requests modal opening
- */
 function selectIncident(incident, triggerModalOpen = false) {
   if (!incident) return;
   state.selectedIncidentId = incident.id;
   state.selectedIncident = incident;
 
-  // Update visual selection across table rows
   const rows = document.querySelectorAll('#incidents-table-body tr');
   rows.forEach(row => {
     if (row.dataset.id === incident.id) {
@@ -471,15 +395,15 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   console.log(`[SOC-FUSION] Incident selected: ${incident.id} (${incident.incident_type})`);
 
-  // Dispatch custom event for modular consumption by subsequent phases
   document.dispatchEvent(new CustomEvent('soc:incident-selected', {
     detail: { incident, triggerModalOpen }
   }));
+
+  if (triggerModalOpen) {
+    openIncidentModal(incident);
+  }
 }
 
-/**
- * Fetch incidents from backend API or provide demo data fallback
- */
 async function fetchIncidents() {
   try {
     const response = await fetch(API_CONFIG.ENDPOINTS.INCIDENTS);
@@ -597,6 +521,243 @@ async function fetchIncidents() {
   }
 }
 
+/**
+ * ==========================================================================
+ * INCIDENT DETAILS MODAL / INVESTIGATION DOSSIER (PHASE 6)
+ * ==========================================================================
+ */
+
+/**
+ * Open and populate the Incident Investigation Dossier Modal
+ * @param {Object} incident Incident data record
+ */
+function openIncidentModal(incident) {
+  if (!incident) return;
+
+  const modalEl = document.getElementById('incident-modal');
+  if (!modalEl) return;
+
+  // Title
+  const titleEl = document.getElementById('modal-incident-title');
+  if (titleEl) titleEl.textContent = `INCIDENT INVESTIGATION DOSSIER — ${incident.id}`;
+
+  // Key Metadata
+  const idEl = document.getElementById('modal-incident-id');
+  const ipEl = document.getElementById('modal-source-ip');
+  const typeEl = document.getElementById('modal-incident-type');
+  const sevEl = document.getElementById('modal-severity');
+  const riskEl = document.getElementById('modal-risk-score');
+  const confEl = document.getElementById('modal-confidence');
+  const firstSeenEl = document.getElementById('modal-first-seen');
+  const lastSeenEl = document.getElementById('modal-last-seen');
+  const statusEl = document.getElementById('modal-status');
+
+  if (idEl) idEl.textContent = incident.id || '--';
+  if (ipEl) ipEl.textContent = incident.source_ip || '--';
+  if (typeEl) typeEl.textContent = incident.incident_type || '--';
+
+  // Severity badge in modal
+  if (sevEl) {
+    sevEl.innerHTML = '';
+    const sevKey = (incident.severity || 'LOW').toUpperCase();
+    const spanSev = document.createElement('span');
+    spanSev.className = `badge-sev badge-sev-${sevKey.toLowerCase()}`;
+    spanSev.textContent = sevKey;
+    sevEl.appendChild(spanSev);
+  }
+
+  // Risk Score with color
+  if (riskEl) {
+    riskEl.textContent = incident.risk_score ?? '--';
+    riskEl.className = 'meta-value';
+    if ((incident.risk_score ?? 0) >= 80) riskEl.classList.add('text-red');
+    else if ((incident.risk_score ?? 0) >= 60) riskEl.classList.add('text-orange');
+    else if ((incident.risk_score ?? 0) >= 40) riskEl.classList.add('text-yellow');
+    else riskEl.classList.add('text-green');
+  }
+
+  // Confidence
+  if (confEl) {
+    confEl.textContent = typeof incident.confidence === 'number' ? `${incident.confidence}%` : (incident.confidence || '--');
+  }
+
+  if (firstSeenEl) firstSeenEl.textContent = incident.first_seen || '10:31:12';
+  if (lastSeenEl) lastSeenEl.textContent = incident.last_seen || '10:31:21';
+
+  // Status badge in modal
+  if (statusEl) {
+    statusEl.innerHTML = '';
+    const statusKey = (incident.status || 'OPEN').toUpperCase();
+    const spanStatus = document.createElement('span');
+    spanStatus.className = `badge-status status-${statusKey.toLowerCase()}`;
+    spanStatus.textContent = statusKey;
+    statusEl.appendChild(spanStatus);
+  }
+
+  // Section: WHY WAS THIS INCIDENT CREATED?
+  const reasonsListEl = document.getElementById('modal-creation-reasons');
+  if (reasonsListEl) {
+    reasonsListEl.innerHTML = '';
+    const reasons = incident.reasons || [
+      'Multiple correlated signals detected from the same source IP',
+      'Port scanning reconnaissance behavior confirmed',
+      'Telemetry events occurred within correlation window'
+    ];
+    reasons.forEach(reason => {
+      const li = document.createElement('li');
+      li.textContent = reason;
+      reasonsListEl.appendChild(li);
+    });
+  }
+
+  // Section: ATTACK PROGRESSION
+  const progressionEl = document.getElementById('modal-attack-progression');
+  if (progressionEl) {
+    progressionEl.innerHTML = '';
+    const steps = incident.progression || ['Reconnaissance', 'Brute Force', 'Possible Exfiltration'];
+    steps.forEach((step, index) => {
+      const stepSpan = document.createElement('span');
+      stepSpan.className = 'progression-step';
+      stepSpan.textContent = step;
+      progressionEl.appendChild(stepSpan);
+
+      if (index < steps.length - 1) {
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'progression-arrow';
+        arrowSpan.innerHTML = '&rarr;';
+        progressionEl.appendChild(arrowSpan);
+      }
+    });
+  }
+
+  // Section: RECOMMENDED ACTION
+  const actionEl = document.getElementById('modal-recommended-action');
+  if (actionEl) {
+    actionEl.textContent = incident.recommended_action || 'Investigate source host immediately. Isolate host if traffic exceeds threshold.';
+  }
+
+  // Show Modal Dialog
+  modalEl.classList.remove('hidden');
+  modalEl.setAttribute('aria-hidden', 'false');
+}
+
+/**
+ * Close the Incident Investigation Dossier Modal
+ */
+function closeIncidentModal() {
+  const modalEl = document.getElementById('incident-modal');
+  if (modalEl) {
+    modalEl.classList.add('hidden');
+    modalEl.setAttribute('aria-hidden', 'true');
+  }
+}
+
+/**
+ * Handle incident status update API requests
+ * @param {string} newStatus 
+ */
+async function updateIncidentStatus(newStatus) {
+  if (!state.selectedIncident) return;
+  const incidentId = state.selectedIncident.id;
+
+  try {
+    const endpoint = `/api/incidents/${encodeURIComponent(incidentId)}/${newStatus.toLowerCase()}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  } catch (err) {
+    // When API is running in local preview mode, update local state directly
+    console.warn(`[SOC-FUSION] Live backend endpoint unavailable for ${newStatus}. Updating state locally for preview.`);
+  }
+
+  // Update local incident record
+  state.selectedIncident.status = newStatus;
+  const idx = state.incidents.findIndex(inc => inc.id === incidentId);
+  if (idx !== -1) {
+    state.incidents[idx].status = newStatus;
+  }
+
+  // If incident was closed, update active incidents count
+  if (newStatus === 'CLOSED') {
+    state.stats.active_incidents = Math.max(0, (state.stats.active_incidents || 1) - 1);
+    if ((state.selectedIncident.severity || '').toUpperCase() === 'CRITICAL') {
+      state.stats.critical_incidents = Math.max(0, (state.stats.critical_incidents || 1) - 1);
+    }
+    renderSummaryCards(state.stats);
+  }
+
+  // Refresh table and modal status badge
+  renderIncidentsTable(state.incidents);
+  
+  const statusEl = document.getElementById('modal-status');
+  if (statusEl) {
+    statusEl.innerHTML = '';
+    const spanStatus = document.createElement('span');
+    spanStatus.className = `badge-status status-${newStatus.toLowerCase()}`;
+    spanStatus.textContent = newStatus;
+    statusEl.appendChild(spanStatus);
+  }
+
+  console.log(`[SOC-FUSION] Incident ${incidentId} marked as ${newStatus}`);
+}
+
+/**
+ * Attach modal event listeners
+ */
+function initModalListeners() {
+  const modalEl = document.getElementById('incident-modal');
+  const closeBtn = document.getElementById('btn-close-modal');
+
+  // Close via button
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeIncidentModal);
+  }
+
+  // Close via backdrop click
+  if (modalEl) {
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) {
+        closeIncidentModal();
+      }
+    });
+  }
+
+  // Close via Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalEl && !modalEl.classList.contains('hidden')) {
+      closeIncidentModal();
+    }
+  });
+
+  // Action Button 1: ASSIGN
+  const assignBtn = document.getElementById('btn-assign-incident');
+  if (assignBtn) {
+    assignBtn.addEventListener('click', () => {
+      updateIncidentStatus('ASSIGNED');
+    });
+  }
+
+  // Action Button 2: MARK INVESTIGATING
+  const investBtn = document.getElementById('btn-investigating-incident');
+  if (investBtn) {
+    investBtn.addEventListener('click', () => {
+      updateIncidentStatus('INVESTIGATING');
+    });
+  }
+
+  // Action Button 3: CLOSE INCIDENT
+  const closeIncBtn = document.getElementById('btn-close-incident');
+  if (closeIncBtn) {
+    closeIncBtn.addEventListener('click', () => {
+      updateIncidentStatus('CLOSED');
+      setTimeout(closeIncidentModal, 350);
+    });
+  }
+}
+
 async function fetchStats() {
   try {
     const response = await fetch(API_CONFIG.ENDPOINTS.STATS);
@@ -688,23 +849,24 @@ window.socDashboard = {
     if (target) selectIncident(target, true);
     return target;
   },
-  addIncident: (incidentData) => {
-    state.incidents.unshift(incidentData);
-    renderIncidentsTable(state.incidents);
-    return incidentData;
+  openModal: (id) => {
+    const target = state.incidents.find(inc => inc.id === id) || state.selectedIncident;
+    if (target) openIncidentModal(target);
+    return target;
   },
+  closeModal: closeIncidentModal,
   getState: () => state
 };
 
 // Boot initialization on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[SOC-FUSION] Initializing Phase 5: Active Composite Incidents Table...');
+  console.log('[SOC-FUSION] Initializing Phase 6: Incident Details Modal & Dossier...');
   initClock();
+  initModalListeners();
   fetchStats();
   fetchLogs();
   fetchIncidents();
 
-  // Periodic polling (every 3 seconds) for live telemetry, events, and incidents
   setInterval(() => {
     fetchStats();
     fetchLogs();
