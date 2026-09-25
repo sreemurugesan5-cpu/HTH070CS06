@@ -445,6 +445,7 @@ function selectIncident(incident, triggerModalOpen = false) {
 
   renderSignalFusionVisualizer(incident);
   renderAttackTimeline(incident);
+  renderCharts();
 
   document.dispatchEvent(new CustomEvent('soc:incident-selected', {
     detail: { incident, triggerModalOpen }
@@ -1037,14 +1038,87 @@ function renderCharts() {
 
   applyChartThemeDefaults();
 
+  // Active target IP context: either explicit filter or selected incident IP
+  const activeIp = state.activeIpFilter || (state.selectedIncident ? state.selectedIncident.source_ip : null);
+
+  // Helper to generate pseudo-hash from string for consistent custom IP metrics
+  function getIpSeed(ip) {
+    if (!ip) return 42;
+    let hash = 0;
+    for (let i = 0; i < ip.length; i++) {
+      hash = (hash << 5) - hash + ip.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  }
+
+  // Known IP telemetry profiles
+  const ipProfiles = {
+    '192.168.1.50': {
+      risk: 92,
+      timeline: [85, 210, 390, 580, 840, 960, 820],
+      signals: { 'FAILED_LOGIN': 180, 'PORT_SCAN': 120, 'TRAFFIC_SPIKE': 45, 'AUTH_BURST': 30, 'SYN_SCAN': 22 },
+      severity: [3, 1, 0, 0] // Critical: 3, High: 1, Med: 0, Low: 0
+    },
+    '10.0.12.8': {
+      risk: 88,
+      timeline: [40, 90, 160, 320, 510, 680, 610],
+      signals: { 'SQL_INJECTION': 95, 'AUTH_BURST': 65, 'INVALID_USER': 42, 'DATA_TRANSFER': 28, 'TRAFFIC_SPIKE': 15 },
+      severity: [2, 2, 0, 0]
+    },
+    '172.16.4.19': {
+      risk: 76,
+      timeline: [90, 95, 88, 180, 340, 420, 260],
+      signals: { 'DNS_TUNNEL': 110, 'C2_BEACON': 85, 'OUTBOUND_CONN': 50, 'PORT_SCAN': 25, 'TRAFFIC_SPIKE': 12 },
+      severity: [0, 3, 1, 0]
+    },
+    '192.168.2.105': {
+      risk: 70,
+      timeline: [20, 35, 60, 110, 190, 175, 140],
+      signals: { 'LATERAL_MOVE': 65, 'SMB_BURST': 40, 'PORT_SCAN': 30, 'FAILED_LOGIN': 20, 'DNS_QUERY': 15 },
+      severity: [0, 1, 3, 0]
+    },
+    '10.200.5.44': {
+      risk: 48,
+      timeline: [10, 15, 12, 25, 30, 22, 18],
+      signals: { 'DNS_QUERY': 45, 'HTTP_GET': 32, 'TLS_HANDSHAKE': 20, 'TRAFFIC_SPIKE': 8, 'PORT_SCAN': 5 },
+      severity: [0, 0, 2, 2]
+    }
+  };
+
   // 1. CHART: EVENTS OVER TIME (Line / Area)
   const ctxTimeline = document.getElementById('chart-events-timeline');
   if (ctxTimeline) {
     const timelineLabels = ['10:20', '10:22', '10:24', '10:26', '10:28', '10:30', '10:32'];
-    const timelineData = [120, 185, 140, 290, 410, 680, 520];
+    let timelineData;
+    let timelineLabelName;
+
+    if (activeIp && ipProfiles[activeIp]) {
+      timelineData = [...ipProfiles[activeIp].timeline];
+      timelineLabelName = `Events / Min (${activeIp})`;
+    } else if (activeIp) {
+      const seed = getIpSeed(activeIp);
+      const base = (seed % 30) + 10;
+      const peak = base * ((seed % 5) + 3);
+      timelineData = [
+        base,
+        Math.floor(base * 1.5),
+        Math.floor(base * 2.2),
+        Math.floor(peak * 0.7),
+        peak,
+        Math.floor(peak * 0.85),
+        Math.floor(base * 1.8)
+      ];
+      timelineLabelName = `Events / Min (${activeIp})`;
+    } else {
+      timelineData = [120, 185, 140, 290, 410, 680, 520];
+      timelineLabelName = 'All Host Events / Min';
+    }
 
     if (charts.eventsTimeline) {
+      charts.eventsTimeline.data.datasets[0].label = timelineLabelName;
       charts.eventsTimeline.data.datasets[0].data = timelineData;
+      charts.eventsTimeline.data.datasets[0].borderColor = activeIp ? '#00d2ff' : '#38bdf8';
       charts.eventsTimeline.update();
     } else {
       charts.eventsTimeline = new Chart(ctxTimeline, {
@@ -1052,9 +1126,9 @@ function renderCharts() {
         data: {
           labels: timelineLabels,
           datasets: [{
-            label: 'Events / Min',
+            label: timelineLabelName,
             data: timelineData,
-            borderColor: '#38bdf8',
+            borderColor: activeIp ? '#00d2ff' : '#38bdf8',
             backgroundColor: 'rgba(56, 189, 248, 0.12)',
             borderWidth: 2,
             tension: 0.35,
@@ -1078,7 +1152,10 @@ function renderCharts() {
             }
           },
           plugins: {
-            legend: { display: false }
+            legend: { 
+              display: !!activeIp,
+              labels: { color: '#38bdf8', font: { size: 10 } }
+            }
           }
         }
       });
@@ -1088,26 +1165,32 @@ function renderCharts() {
   // 2. CHART: INCIDENTS BY SEVERITY (Doughnut)
   const ctxSeverity = document.getElementById('chart-severity-breakdown');
   if (ctxSeverity) {
-    // Dynamically calculate severity distribution from active incidents
-    let criticalCount = 0;
-    let highCount = 0;
-    let mediumCount = 0;
-    let lowCount = 0;
+    let severityData;
+    if (activeIp && ipProfiles[activeIp]) {
+      severityData = [...ipProfiles[activeIp].severity];
+    } else if (activeIp) {
+      const seed = getIpSeed(activeIp);
+      const isHigh = (seed % 2 === 0);
+      severityData = isHigh ? [1, 2, 1, 0] : [0, 1, 2, 2];
+    } else {
+      let criticalCount = 0;
+      let highCount = 0;
+      let mediumCount = 0;
+      let lowCount = 0;
 
-    (state.incidents || []).forEach(inc => {
-      const sev = (inc.severity || '').toUpperCase();
-      if (sev === 'CRITICAL') criticalCount++;
-      else if (sev === 'HIGH') highCount++;
-      else if (sev === 'MEDIUM') mediumCount++;
-      else lowCount++;
-    });
+      (state.incidents || []).forEach(inc => {
+        const sev = (inc.severity || '').toUpperCase();
+        if (sev === 'CRITICAL') criticalCount++;
+        else if (sev === 'HIGH') highCount++;
+        else if (sev === 'MEDIUM') mediumCount++;
+        else lowCount++;
+      });
 
-    // Provide default baseline if incidents are 0
-    if (criticalCount + highCount + mediumCount + lowCount === 0) {
-      criticalCount = 2; highCount = 2; mediumCount = 1; lowCount = 0;
+      if (criticalCount + highCount + mediumCount + lowCount === 0) {
+        criticalCount = 2; highCount = 2; mediumCount = 1; lowCount = 0;
+      }
+      severityData = [criticalCount, highCount, mediumCount, lowCount];
     }
-
-    const severityData = [criticalCount, highCount, mediumCount, lowCount];
 
     if (charts.severityBreakdown) {
       charts.severityBreakdown.data.datasets[0].data = severityData;
@@ -1151,10 +1234,31 @@ function renderCharts() {
   // 3. CHART: SIGNAL TYPES DISTRIBUTION (Horizontal Bar)
   const ctxSignals = document.getElementById('chart-signal-types');
   if (ctxSignals) {
-    const signalLabels = ['FAILED_LOGIN', 'PORT_SCAN', 'TRAFFIC_SPIKE', 'DNS_QUERY', 'DATA_TRANSFER'];
-    const signalCounts = [215, 124, 42, 35, 18];
+    let signalLabels;
+    let signalCounts;
+
+    if (activeIp && ipProfiles[activeIp]) {
+      const sigs = ipProfiles[activeIp].signals;
+      signalLabels = Object.keys(sigs);
+      signalCounts = Object.values(sigs);
+    } else if (activeIp) {
+      const seed = getIpSeed(activeIp);
+      signalLabels = ['FAILED_LOGIN', 'PORT_SCAN', 'DNS_QUERY', 'TRAFFIC_SPIKE', 'TLS_PROBE'];
+      signalCounts = [
+        (seed % 40) + 15,
+        (seed % 30) + 10,
+        (seed % 50) + 20,
+        (seed % 25) + 5,
+        (seed % 15) + 3
+      ];
+    } else {
+      signalLabels = ['FAILED_LOGIN', 'PORT_SCAN', 'TRAFFIC_SPIKE', 'DNS_QUERY', 'DATA_TRANSFER'];
+      signalCounts = [215, 124, 42, 35, 18];
+    }
 
     if (charts.signalTypes) {
+      charts.signalTypes.data.labels = signalLabels;
+      charts.signalTypes.data.datasets[0].label = activeIp ? `Signals (${activeIp})` : 'Global Signal Count';
       charts.signalTypes.data.datasets[0].data = signalCounts;
       charts.signalTypes.update();
     } else {
@@ -1163,7 +1267,7 @@ function renderCharts() {
         data: {
           labels: signalLabels,
           datasets: [{
-            label: 'Signal Count',
+            label: activeIp ? `Signals (${activeIp})` : 'Signal Count',
             data: signalCounts,
             backgroundColor: 'rgba(0, 210, 255, 0.75)',
             borderColor: '#00d2ff',
@@ -1195,29 +1299,53 @@ function renderCharts() {
   // 4. CHART: TOP SOURCE IPS (Vertical Bar)
   const ctxTopIps = document.getElementById('chart-top-ips');
   if (ctxTopIps) {
-    const ipLabels = ['192.168.1.50', '10.0.12.8', '172.16.4.19', '192.168.2.105', '10.200.5.44'];
-    const ipRiskScores = [92, 88, 76, 70, 48];
+    let baseIps = ['192.168.1.50', '10.0.12.8', '172.16.4.19', '192.168.2.105', '10.200.5.44'];
+    let baseScores = [92, 88, 76, 70, 48];
+
+    // If active IP is not in base list, include it!
+    if (activeIp && !baseIps.includes(activeIp)) {
+      const calculatedRisk = (getIpSeed(activeIp) % 65) + 30;
+      baseIps = [activeIp, ...baseIps.slice(0, 4)];
+      baseScores = [calculatedRisk, ...baseScores.slice(0, 4)];
+    }
+
+    // Dynamic coloring: highlight active IP in neon cyan `#00d2ff`
+    const bgColors = baseIps.map(ip => {
+      if (activeIp && ip === activeIp) {
+        return '#00d2ff'; // Active neon cyan highlight!
+      }
+      const score = baseScores[baseIps.indexOf(ip)];
+      if (score >= 80) return 'rgba(239, 68, 68, 0.75)';
+      if (score >= 60) return 'rgba(249, 115, 22, 0.75)';
+      return 'rgba(234, 179, 8, 0.75)';
+    });
+
+    const borderColors = baseIps.map(ip => {
+      return (activeIp && ip === activeIp) ? '#ffffff' : 'rgba(56, 189, 248, 0.3)';
+    });
+
+    const borderWidths = baseIps.map(ip => {
+      return (activeIp && ip === activeIp) ? 2 : 1;
+    });
 
     if (charts.topIps) {
-      charts.topIps.data.datasets[0].data = ipRiskScores;
+      charts.topIps.data.labels = baseIps;
+      charts.topIps.data.datasets[0].data = baseScores;
+      charts.topIps.data.datasets[0].backgroundColor = bgColors;
+      charts.topIps.data.datasets[0].borderColor = borderColors;
+      charts.topIps.data.datasets[0].borderWidth = borderWidths;
       charts.topIps.update();
     } else {
       charts.topIps = new Chart(ctxTopIps, {
         type: 'bar',
         data: {
-          labels: ipLabels,
+          labels: baseIps,
           datasets: [{
             label: 'Risk Score',
-            data: ipRiskScores,
-            backgroundColor: [
-              'rgba(239, 68, 68, 0.8)',  // Critical Red
-              'rgba(239, 68, 68, 0.8)',  // Critical Red
-              'rgba(249, 115, 22, 0.8)', // High Orange
-              'rgba(249, 115, 22, 0.8)', // High Orange
-              'rgba(234, 179, 8, 0.8)'   // Medium Yellow
-            ],
-            borderColor: 'rgba(56, 189, 248, 0.3)',
-            borderWidth: 1,
+            data: baseScores,
+            backgroundColor: bgColors,
+            borderColor: borderColors,
+            borderWidth: borderWidths,
             borderRadius: 4
           }]
         },
@@ -2163,11 +2291,30 @@ function filterDashboardByIP(ip) {
   renderEventStream(state.logs, false);
   renderIncidentsTable(state.incidents);
 
-  // If there's an incident matching this IP, select it
+  // If there's an incident matching this IP, select it; otherwise synthesize an incident profile
   const matchingIncident = state.incidents.find(i => i.source_ip === ip);
   if (matchingIncident) {
     selectIncident(matchingIncident, false);
+  } else {
+    // Generate synthetic incident for this IP so Signal Fusion and Attack Timeline also update!
+    const cleanId = ip.replace(/[^0-9]/g, '').slice(-4) || 'TEL';
+    const synthIncident = {
+      id: `INC-HOST-${cleanId}`,
+      source_ip: ip,
+      incident_type: 'HOST TELEMETRY CORRELATION',
+      severity: 'MEDIUM',
+      risk_score: 55,
+      confidence: 88,
+      status: 'INVESTIGATING',
+      signals: ['HOST_PROBE', 'PORT_SCAN', 'TRAFFIC_SPIKE'],
+      first_seen: new Date(Date.now() - 1800000).toLocaleTimeString('en-US', { hour12: false }),
+      last_seen: new Date().toLocaleTimeString('en-US', { hour12: false })
+    };
+    selectIncident(synthIncident, false);
   }
+
+  // Transform all 4 charts immediately
+  renderCharts();
 }
 
 function clearIPFilter() {
@@ -2182,6 +2329,11 @@ function clearIPFilter() {
 
   renderEventStream(state.logs, false);
   renderIncidentsTable(state.incidents);
+
+  if (state.incidents && state.incidents.length > 0) {
+    selectIncident(state.incidents[0], false);
+  }
+  renderCharts();
 }
 
 window.socDashboard = {
