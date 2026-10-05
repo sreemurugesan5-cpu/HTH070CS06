@@ -5,6 +5,7 @@
 [![Chart.js](https://img.shields.io/badge/Analytics-Chart.js-FF6384.svg?logo=chartdotjs&logoColor=white)](https://www.chartjs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Cybersecurity](https://img.shields.io/badge/Domain-SOC%20%2F%20Threat%20Intelligence-red.svg)](https://mitre.org)
+[![Live Demo on Vercel](https://img.shields.io/badge/Live%20Demo-hth070cs06.vercel.app-000000.svg?logo=vercel&logoColor=white)](https://hth070cs06.vercel.app)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/sreemurugesan5-cpu/HTH070CS06)
 
 > **A Next-Generation Security Operations Center (SOC) Platform engineered to solve Level 1 Analyst Alert Fatigue through Temporal Signal Correlation, Host Threat Intelligence Profiling, and Dynamic Telemetry Pivoting.**
