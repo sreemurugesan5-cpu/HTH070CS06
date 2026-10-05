@@ -3,17 +3,23 @@ import json
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'soc_fusion.db')
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME') or not os.access(os.path.dirname(os.path.abspath(__file__)), os.W_OK):
+    DB_PATH = os.path.join('/tmp', 'soc_fusion.db')
+else:
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'soc_fusion.db')
 
 def get_db_connection():
     """Establish and return an SQLite connection with Row factory."""
+    if not os.path.exists(DB_PATH):
+        init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db(force_reseed=False):
     """Create schema tables and populate with realistic default SOC data."""
-    conn = get_db_connection()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     if force_reseed:
