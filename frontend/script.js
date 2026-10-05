@@ -6,11 +6,8 @@
  */
 
 // Central API Configuration
-const API_BASE = (window.location.port === '5000')
-  ? ''
-  : (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || !window.location.port)
-    ? 'http://localhost:5000'
-    : '';
+// Use relative root '' for any web protocol (http/https/Cloudflare tunnels), only fallback to localhost for file://
+const API_BASE = (window.location.protocol === 'file:') ? 'http://localhost:5000' : '';
 
 const API_CONFIG = {
   BASE_URL: API_BASE,
